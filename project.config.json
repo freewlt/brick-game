@@ -1,0 +1,27 @@
+{
+  "compileType": "game",
+  "appid": "wxc3363c27a25febde",
+  "projectname": "赢了个赢",
+  "setting": {
+    "es6": true,
+    "postcss": false,
+    "minified": false,
+    "uglifyFileName": false,
+    "enhance": false,
+    "packNpmRelationList": [],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "useCompilerPlugins": false,
+    "newFeature": false
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "isGameTourist": false,
+  "editorSetting": {}
+}
