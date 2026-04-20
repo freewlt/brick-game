@@ -8,6 +8,7 @@ export default class StartScene {
     this.btnRect       = null
     this.rankBtnRect   = null
     this.livesBtnRect  = null
+    this.settingsBtnRect = null
     this.logoAlpha     = 0
     this.btnScale      = 1
     this.frame         = 0
@@ -186,12 +187,13 @@ export default class StartScene {
     ctx.fillText('🚗 开始赢车', btnCX, btnCY)
     ctx.restore()
 
-    // ===== 底部工具栏：排行榜 + 机会 =====
+    // ===== 底部工具栏：排行榜 + 机会 + 设置 =====
     const toolY = H * 0.835
     const toolH = 50
-    const toolW = (W - 48) / 2
+    const toolW = (W - 56) / 3   // 三列等宽
     const tool1X = 16
-    const tool2X = 16 + toolW + 16
+    const tool2X = tool1X + toolW + 12
+    const tool3X = tool2X + toolW + 12
 
     // 排行榜按钮
     ctx.save()
@@ -236,6 +238,26 @@ export default class StartScene {
     const hearts = '❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3 - lives))
     ctx.fillText(`${hearts} ×${lives}`, tool2X + toolW / 2, toolY + toolH / 2)
     this.livesBtnRect = { x: tool2X, y: toolY, w: toolW, h: toolH }
+    ctx.restore()
+
+    // 设置按钮
+    ctx.save()
+    ctx.fillStyle   = 'rgba(160,160,255,0.10)'
+    ctx.strokeStyle = 'rgba(160,160,255,0.40)'
+    ctx.lineWidth   = 1.2
+    roundRect(ctx, tool3X, toolY, toolW, toolH, 16)
+    ctx.fill(); ctx.stroke()
+    const t3hg = ctx.createLinearGradient(tool3X, toolY, tool3X, toolY + toolH * 0.5)
+    t3hg.addColorStop(0, 'rgba(255,255,255,0.08)')
+    t3hg.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = t3hg
+    roundRect(ctx, tool3X, toolY, toolW, toolH * 0.5, { tl: 16, tr: 16, bl: 0, br: 0 })
+    ctx.fill()
+    ctx.font = 'bold 15px sans-serif'
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = 'rgba(200,200,255,0.9)'
+    ctx.fillText('⚙️ 设置', tool3X + toolW / 2, toolY + toolH / 2)
+    this.settingsBtnRect = { x: tool3X, y: toolY, w: toolW, h: toolH }
     ctx.restore()
 
     // 说明文字
@@ -346,6 +368,11 @@ export default class StartScene {
 
     if (hit(this.rankBtnRect)) {
       this.game.showLeaderboard()
+      return
+    }
+
+    if (hit(this.settingsBtnRect)) {
+      this.game.showSettings()
       return
     }
 

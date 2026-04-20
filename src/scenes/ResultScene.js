@@ -54,6 +54,12 @@ export default class ResultScene {
       // 通关：上传排行榜数据（已通关数 = levelIdx + 1）
       saveProgress(this.levelIdx + 1)
       this.lives = getLives()
+      // 最后一关通关：1.2秒后自动跳到全通关彩蛋页
+      if (this.levelIdx >= (CONFIG.LEVELS.length - 1)) {
+        setTimeout(() => {
+          this.game.showAllClear()
+        }, 1200)
+      }
     }
   }
 
@@ -261,18 +267,21 @@ export default class ResultScene {
       ctx.restore()
 
     } else if (isWin && isLastLvl) {
-      // 最终通关：再玩一遍 + 首页
+      // 最终通关：显示"即将进入彩蛋页"提示 + 手动按钮作为备选
       const bw2   = (cardW - 32 - 12) / 2
       const btn1X = cardX + 16, btn2X = cardX + 16 + bw2 + 12
+
+      // 主按钮：进入彩蛋
       ctx.save()
       const g = ctx.createLinearGradient(btn1X, btnAreaTop, btn1X, btnAreaTop + btnH)
       g.addColorStop(0, '#FFD700'); g.addColorStop(1, '#FF8C00')
       ctx.fillStyle = g
       roundRect(ctx, btn1X, btnAreaTop, bw2, btnH, btnR); ctx.fill()
-      ctx.font = 'bold 16px sans-serif'
+      ctx.font = 'bold 15px sans-serif'
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1a1a2e'
-      ctx.fillText('🔄 再玩一遍', btn1X + bw2 / 2, btnAreaTop + btnH / 2)
-      this.retryBtn = { x: btn1X, y: btnAreaTop, w: bw2, h: btnH }
+      ctx.fillText('🎉 查看彩蛋', btn1X + bw2 / 2, btnAreaTop + btnH / 2)
+      this.nextBtn  = { x: btn1X, y: btnAreaTop, w: bw2, h: btnH }   // 复用 nextBtn 跳转
+      this.retryBtn = null
       ctx.restore()
 
       ctx.save()
@@ -350,9 +359,14 @@ export default class ResultScene {
 
   onTouchEnd(x, y) {
     const hit = (b) => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h
+    const isLastLvl = this.levelIdx >= (CONFIG.LEVELS.length - 1)
 
     if (hit(this.nextBtn)) {
-      this.game.showGame(this.levelIdx + 1)
+      if (isLastLvl) {
+        this.game.showAllClear()   // 最终关：手动也可跳彩蛋
+      } else {
+        this.game.showGame(this.levelIdx + 1)
+      }
       return
     }
     if (hit(this.retryBtn)) {

@@ -3,7 +3,10 @@ import GameScene        from './src/scenes/GameScene.js'
 import StartScene       from './src/scenes/StartScene.js'
 import ResultScene      from './src/scenes/ResultScene.js'
 import LeaderboardScene from './src/scenes/LeaderboardScene.js'
+import SettingsScene    from './src/scenes/SettingsScene.js'
+import AllClearScene    from './src/scenes/AllClearScene.js'
 import { handleShareEntry } from './src/utils/storage.js'
+import AudioManager     from './src/utils/audio.js'
 
 const canvas = wx.createCanvas()
 const ctx = canvas.getContext('2d')
@@ -16,6 +19,16 @@ const logicHeight = sysInfo.windowHeight
 // 设备像素比（iPhone高清屏通常是2或3）
 const dpr = sysInfo.pixelRatio || 1
 
+// ✅ 动态计算安全顶部高度（状态栏 + 胶囊按钮区，适配刘海屏/安卓各机型）
+// statusBarHeight = 状态栏高度（系统级，各机型不同）
+// + 44 = 胶囊按钮高度（微信固定 32px）+ 上下各 6px 间距
+let safeTopHeight = 88  // 兜底默认值
+try {
+  const winInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+  safeTopHeight = (winInfo.statusBarHeight || 0) + 44
+} catch (e) {}
+const safeTop = safeTopHeight
+
 // ✅ canvas 物理像素 = 逻辑尺寸 × DPR → 高清不模糊
 canvas.width  = logicWidth  * dpr
 canvas.height = logicHeight * dpr
@@ -27,14 +40,18 @@ ctx.scale(dpr, dpr)
 const Game = {
   canvas,
   ctx,
-  width:  logicWidth,
-  height: logicHeight,
+  width:   logicWidth,
+  height:  logicHeight,
+  safeTop: safeTop,     // ✅ 动态安全顶，各场景统一从 this.game.safeTop 读取
   dpr,
   currentScene: null,
   // 好友助力提示（入场时短暂显示）
   _shareToast: null,
 
   init() {
+    // 初始化音效系统（创建 WebAudioContext）
+    AudioManager.init()
+
     // 检测是否从好友分享链接进入
     const fromShare = handleShareEntry()
     if (fromShare) {
@@ -64,6 +81,18 @@ const Game = {
 
   showLeaderboard() {
     this.currentScene = new LeaderboardScene(this)
+    this.currentScene.init()
+  },
+
+  showSettings() {
+    // 进设置页时停掉 BGM，避免 timer 泄漏
+    AudioManager.stopBGM()
+    this.currentScene = new SettingsScene(this)
+    this.currentScene.init()
+  },
+
+  showAllClear() {
+    this.currentScene = new AllClearScene(this)
     this.currentScene.init()
   },
 

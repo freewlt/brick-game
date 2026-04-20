@@ -115,11 +115,19 @@ function fetchFriendRank() {
 
 // ==================== 分享 ====================
 
+// ⚙️ 分享配置 — 上线前在这里填入你的封面图地址即可
+// 封面图要求：微信要求 5:4 比例，建议 1000×800px，CDN 直链（https://）
+// 也可以填小游戏内的本地路径，如 'images/share_cover.jpg'
+const SHARE_CONFIG = {
+  title:    '我在「赢了个赢」里三消赢豪车，来挑战我！',
+  imageUrl: 'images/share_cover.jpg',   // ← 填入封面图 URL，留空则微信自动截屏
+}
+
 // 分享给好友并立即给自己+1机会（乐观更新）
 function shareForLife(cb) {
   wx.shareAppMessage({
-    title: '我在赢了个赢里消消乐，三消赢豪车！来挑战我！',
-    imageUrl: '',          // 可填自定义封面图路径
+    title:    SHARE_CONFIG.title,
+    imageUrl: SHARE_CONFIG.imageUrl,
     query: 'from=share',
     success: () => {
       const next = addLife(1)
@@ -144,7 +152,46 @@ function handleShareEntry() {
   return false
 }
 
+// ==================== 道具持久化 ====================
+const PROPS_EXTRA_KEY = 'ywgy_props_extra'
+
+function _loadPropsExtra() {
+  try {
+    const raw = wx.getStorageSync(PROPS_EXTRA_KEY)
+    if (raw && typeof raw === 'object') return raw
+  } catch (e) {}
+  return { expand: 0, shuffle: 0 }
+}
+
+function _savePropsExtra(data) {
+  try { wx.setStorageSync(PROPS_EXTRA_KEY, data) } catch (e) {}
+}
+
+// 读取额外道具存量
+function getExtraProps() {
+  return _loadPropsExtra()
+}
+
+// 消耗1个额外道具（type: 'expand'|'shuffle'），返回是否成功
+function spendExtraProp(type, n = 1) {
+  const data = _loadPropsExtra()
+  if ((data[type] || 0) < n) return false
+  data[type] = data[type] - n
+  _savePropsExtra(data)
+  return true
+}
+
+// 增加额外道具（广告/分享成功后调用）
+function addExtraProp(type, n = 1) {
+  const data = _loadPropsExtra()
+  data[type] = (data[type] || 0) + n
+  _savePropsExtra(data)
+  return data[type]
+}
+
 export {
+  // 分享配置（供其他场景复用）
+  SHARE_CONFIG,
   // 机会
   getLives,
   spendLife,
@@ -156,4 +203,8 @@ export {
   // 分享
   shareForLife,
   handleShareEntry,
+  // 道具
+  getExtraProps,
+  spendExtraProp,
+  addExtraProp,
 }

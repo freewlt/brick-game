@@ -1,5 +1,6 @@
 // 游戏核心逻辑 - 赢了个赢（关卡制，无倒计时）
 import { CONFIG } from '../config.js'
+import { getExtraProps, spendExtraProp } from '../utils/storage.js'
 
 export default class GameLogic {
   constructor() {
@@ -20,10 +21,14 @@ export default class GameLogic {
     this.win        = false
     this._idCounter = 0
     // ② 撤销
-    this.undoStack  = []    // 最多保留1个快照
-    this.undoLeft   = 1     // 每关1次
-    // ③ 插槽高亮（供 GameScene 读取）
+    this.undoStack  = []
+    this.undoLeft   = 1
+    // ③ 插槽高亮
     this.lastInsertIdx = -1
+    // ④ 道具
+    this.expandLeft    = 0
+    this.shuffleLeft   = 0
+    this.slotMax       = CONFIG.SLOT_MAX   // 当前有效槽位上限（扩槽后变7）
   }
 
   // ========== 关卡初始化 ==========
@@ -33,6 +38,15 @@ export default class GameLogic {
     const cfg = CONFIG.LEVELS[Math.min(levelIdx, CONFIG.LEVELS.length - 1)]
     this.maxMoves = cfg.maxMoves || 0
     this.undoLeft = 1
+
+    // 每关固定配发 + Storage 里的额外存量
+    const extra = getExtraProps()
+    this.expandLeft  = CONFIG.PROPS_PER_LEVEL.expand  + (extra.expand  || 0)
+    this.shuffleLeft = CONFIG.PROPS_PER_LEVEL.shuffle + (extra.shuffle || 0)
+    // 额外量已合并进内存，清掉 Storage（避免下关重复叠加）
+    if (extra.expand  > 0) spendExtraProp('expand',  extra.expand)
+    if (extra.shuffle > 0) spendExtraProp('shuffle', extra.shuffle)
+
     this._buildBoard(cfg)
   }
 
@@ -102,8 +116,6 @@ export default class GameLogic {
     return arr
   }
 
-  destroy() {}
-
   // ========== ① 遮挡系统 ==========
   // 同列上方任意一行有车 → 本格被遮挡，不可点击
   isBlocked(r, c) {
@@ -161,6 +173,68 @@ export default class GameLogic {
     }
   }
 
+  // ========== ④ 道具：扩槽 ==========
+  useExpand() {
+    if (this.expandLeft <= 0)                      return 'empty'
+    if (this.slotMax >= CONFIG.SLOT_MAX_EXPANDED)  return 'maxed'
+    this.expandLeft--
+    this.slotMax = CONFIG.SLOT_MAX_EXPANDED
+    // 扩槽后若之前因槽满导致 gameOver，撤销它
+    if (this.gameOver && this.slot.length < this.slotMax) {
+      this.gameOver = false
+    }
+    return 'ok'
+  }
+
+  // ========== ④ 道具：洗牌 ==========
+  useShuffle() {
+    if (this.shuffleLeft <= 0) return 'empty'
+
+    // 收集棋盘上所有车块
+    const allCars = []
+    for (const row of this.board) {
+      for (const stack of row) {
+        for (const car of stack) allCars.push({ ...car })
+        stack.length = 0
+      }
+    }
+    if (allCars.length === 0) return 'board_empty'
+
+    this._shuffle(allCars)
+
+    // 重新铺放（遵循当前关卡 layerMax）
+    const cfg      = CONFIG.LEVELS[Math.min(this.level, CONFIG.LEVELS.length - 1)]
+    const layerMax = cfg.layerMax
+    const positions = []
+    for (let r = 0; r < CONFIG.BOARD_ROWS; r++)
+      for (let c = 0; c < CONFIG.BOARD_COLS; c++)
+        positions.push({ r, c })
+    this._shuffle(positions)
+
+    let pidx = 0
+    for (const car of allCars) {
+      let placed = false
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[(pidx + i) % positions.length]
+        if (this.board[pos.r][pos.c].length < layerMax) {
+          this.board[pos.r][pos.c].push(car)
+          placed = true
+          pidx = (pidx + i + 1) % positions.length
+          break
+        }
+      }
+      if (!placed) {
+        const pos = positions[pidx % positions.length]
+        this.board[pos.r][pos.c].push(car)
+        pidx = (pidx + 1) % positions.length
+      }
+    }
+
+    this.shuffleLeft--
+    this.lastInsertIdx = -1
+    return 'ok'
+  }
+
   // ========== 点击逻辑 ==========
   clickCell(r, c) {
     if (this.gameOver || this.win) return false
@@ -168,7 +242,7 @@ export default class GameLogic {
     if (this.isBlocked(r, c)) return 'blocked'
     const stack = this.board[r][c]
     if (!stack || stack.length === 0) return false
-    if (this.slot.length >= CONFIG.SLOT_MAX) return false
+    if (this.slot.length >= this.slotMax) return false   // 用 slotMax（扩槽后=7）
 
     // ② 存快照（每次只保留最新1个）
     this.undoStack = [this._snapshot()]
@@ -182,7 +256,7 @@ export default class GameLogic {
     this._checkMatch()
     this._checkWin()
 
-    if (!this.win && this.slot.length >= CONFIG.SLOT_MAX && !this._hasMatchInSlot()) {
+    if (!this.win && this.slot.length >= this.slotMax && !this._hasMatchInSlot()) {
       this.gameOver = true
       return true
     }

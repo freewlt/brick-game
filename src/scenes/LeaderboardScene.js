@@ -45,7 +45,7 @@ export default class LeaderboardScene {
     ctx.fillRect(0, 0, W, H)
 
     // ===== 顶栏 =====
-    const headerH = 88
+    const headerH = this.game.safeTop
     ctx.save()
     ctx.fillStyle = 'rgba(10,20,35,0.97)'
     ctx.fillRect(0, 0, W, headerH)
@@ -60,7 +60,7 @@ export default class LeaderboardScene {
     const hg = ctx.createLinearGradient(W/2 - 80, 0, W/2 + 80, 0)
     hg.addColorStop(0, '#FFD700'); hg.addColorStop(1, '#FFA500')
     ctx.fillStyle = hg
-    ctx.fillText('🏆 好友排行榜', W / 2, 44)
+    ctx.fillText('🏆 好友排行榜', W / 2, headerH / 2)
     ctx.restore()
 
     // 机会提示
@@ -69,7 +69,7 @@ export default class LeaderboardScene {
     ctx.font = '12px sans-serif'
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
     ctx.fillStyle = 'rgba(255,120,120,0.75)'
-    ctx.fillText('❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3 - lives)), W - 16, 44)
+    ctx.fillText('❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3 - lives)), W - 16, headerH / 2)
     ctx.restore()
 
     // ===== 列表区域 =====
@@ -234,7 +234,7 @@ export default class LeaderboardScene {
     this._touchStartY = y
     const rowH    = 72
     const maxScroll = 0
-    const minScroll = -Math.max(0, this.friends.length * rowH - (this.game.height - 88 - 80))
+    const minScroll = -Math.max(0, this.friends.length * rowH - (this.game.height - this.game.safeTop - 80))
     this.scrollY = Math.max(minScroll, Math.min(maxScroll, this.scrollY + delta))
   }
 

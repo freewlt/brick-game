@@ -2,6 +2,8 @@
 import GameLogic from '../logic/GameLogic.js'
 import { CONFIG } from '../config.js'
 import { roundRect } from '../utils/draw.js'
+import AudioManager from '../utils/audio.js'
+import { addExtraProp, SHARE_CONFIG } from '../utils/storage.js'
 
 // 飘字动画
 class FloatText {
@@ -69,6 +71,11 @@ export default class GameScene {
     this._undoFlash   = 0
     this._insertFlash = 0
     this._insertIdx   = -1
+    this._propBtns    = []    // [{type,x,y,w,h}] 每帧重建
+    this._propFlash   = null  // {type, frame} 按钮点亮动画
+    this._adModal     = null  // 获取道具弹层 {type, ...btnRects}
+    this._shuffleAnim = 0     // 洗牌棋盘绿光帧计数
+    this._expandAnim  = 0     // 扩槽第7格弹入帧计数
   }
 
   init() {
@@ -81,6 +88,12 @@ export default class GameScene {
     this._undoFlash   = 0
     this._insertFlash = 0
     this._insertIdx   = -1
+    this._propBtns    = []
+    this._propFlash   = null
+    this._adModal     = null
+    this._shuffleAnim = 0
+    this._expandAnim  = 0
+    AudioManager.playBGM()
   }
 
   // ========== 自适应布局 ==========
@@ -93,12 +106,14 @@ export default class GameScene {
   //   slotBottom ~ H        底部面板（combo/提示/装饰）
   get cellGap()    { return 4 }
   get cellStep()   { return this.cellSize + this.cellGap }
-  get headerH()    { return 170 }  // 88(安全区) + 82(两行内容)
-  get safeTop()    { return 88  }  // 系统按钮区底部Y
+  get safeTop()    { return this.game.safeTop }          // 动态安全顶，来自 game.js
+  get headerH()    { return this.game.safeTop + 82 }     // 安全区 + 两行内容(82px)
   get boardTop()   { return this.headerH + 20 }   // header → 棋盘 间距 20px
   get boardH()     { return CONFIG.BOARD_ROWS * this.cellStep }
-  get slotTop()    { return this.boardTop + this.boardH + 22 }  // 棋盘 → 槽位 间距 22px（含分割线）
-  get bottomPanelTop() { return this.slotTop + this.cellSize + 16 }
+  get slotTop()    { return this.boardTop + this.boardH + 22 }
+  get propBtnTop() { return this.slotTop + this.cellSize + 8 }   // 道具按钮行
+  get propBtnH()   { return 44 }
+  get bottomPanelTop() { return this.propBtnTop + this.propBtnH + 6 }  // 往下移
 
   get cellSize() {
     // 宽度优先：按列数计算最大格子尺寸
@@ -113,7 +128,8 @@ export default class GameScene {
     return Math.floor((this.game.width - totalW) / 2)
   }
   get slotLeft() {
-    const totalW = CONFIG.SLOT_MAX * this.cellStep - this.cellGap
+    const slotMax = this.logic ? this.logic.slotMax : CONFIG.SLOT_MAX
+    const totalW  = slotMax * this.cellStep - this.cellGap
     return Math.floor((this.game.width - totalW) / 2)
   }
 
@@ -130,6 +146,9 @@ export default class GameScene {
     if (this._levelFlash > 0) this._levelFlash--
     if (this._undoFlash  > 0) this._undoFlash--
     if (this._insertFlash > 0) this._insertFlash--
+    if (this._shuffleAnim > 0) this._shuffleAnim--
+    if (this._expandAnim  > 0) this._expandAnim--
+    if (this._propFlash && this._propFlash.frame > 0) this._propFlash.frame--
 
     this.floatTexts = this.floatTexts.filter(t => { t.update(); return !t.isDead() })
     this.particles  = this.particles.filter(p  => { p.update();  return !p.isDead()  })
@@ -149,6 +168,9 @@ export default class GameScene {
       this.floatTexts.push(new FloatText(`+${gained} 🚗`, cx, cy, '#FFD700'))
       if (logic.combo > 1) {
         this.floatTexts.push(new FloatText(`连消 ×${logic.combo}!`, cx, cy - 34, '#FF6B35'))
+        AudioManager.playCombo(logic.combo)
+      } else {
+        AudioManager.playMatch()
       }
       for (let i = 0; i < 18; i++) {
         this.particles.push(new MatchParticle(cx, cy,
@@ -157,14 +179,17 @@ export default class GameScene {
       this.lastCarsWon = logic.carsWon
     }
 
-    if (logic.slot.length >= CONFIG.SLOT_MAX && logic.slot.length > this.lastSlotLen) {
+    if (logic.slot.length >= logic.slotMax && logic.slot.length > this.lastSlotLen) {
       this.shake = 16
+      AudioManager.playSlotFull()
     }
     this.lastSlotLen = logic.slot.length
 
     if ((logic.gameOver || logic.win) && !this._resultScheduled) {
       this._resultScheduled = true
       const stars = logic.calcStars()
+      if (logic.win) AudioManager.playWin()
+      else           AudioManager.playLose()
       setTimeout(() => {
         this.game.showResult(logic.score, logic.carsWon, logic.level, logic.win, stars)
       }, 1000)
@@ -196,10 +221,22 @@ export default class GameScene {
     this._drawBoard(ctx, logic)
     this._drawDivider(ctx, width, logic)
     this._drawSlot(ctx, logic)
+    this._drawPropBtns(ctx, width, logic)      // 道具按钮行
     this._drawBottomPanel(ctx, width, height, logic)
 
     this.particles.forEach(p => p.draw(ctx))
     this.floatTexts.forEach(t => t.draw(ctx))
+
+    // 洗牌绿色光晕
+    if (this._shuffleAnim > 0) {
+      ctx.save()
+      ctx.globalAlpha = (this._shuffleAnim / 20) * 0.22
+      ctx.fillStyle = '#81C784'
+      ctx.fillRect(this.boardLeft - 6, this.boardTop - 6,
+        CONFIG.BOARD_COLS * this.cellStep + 12,
+        CONFIG.BOARD_ROWS * this.cellStep + 12)
+      ctx.restore()
+    }
 
     if (this._undoFlash > 0) {
       ctx.save()
@@ -219,6 +256,9 @@ export default class GameScene {
 
     if (logic.win)           this._drawWin(ctx, width, height)
     else if (logic.gameOver) this._drawGameOver(ctx, width, height)
+
+    // 道具获取弹层（最后渲染，覆盖在最上层）
+    if (this._adModal) this._drawAdModal(ctx, width, height)
 
     ctx.restore()
   }
@@ -309,8 +349,10 @@ export default class GameScene {
     const row2Y = row1Y + 34   // row2 内容中线 y = 137
 
     const canUndo = logic.undoLeft > 0 && logic.undoStack.length > 0
-    const undoW = 56, undoH = 26
-    const undoX = width - padX - undoW, undoY = row2Y - undoH / 2
+    // 右侧：撤销按钮（音效已移到第一行圆形按钮）
+    const btnH = 26, btnR = 13
+    const undoW = 66
+    const undoX = width - padX - undoW, undoY = row2Y - btnH / 2
 
     const dataW = undoX - padX - 6
     const colW  = dataW / 3
@@ -338,18 +380,18 @@ export default class GameScene {
       ctx.restore()
     })
 
-    // 撤销按钮
+    // 撤销按钮（右边）
     ctx.save()
     ctx.fillStyle   = canUndo ? 'rgba(255,215,0,0.15)' : 'rgba(60,60,60,0.15)'
     ctx.strokeStyle = canUndo ? 'rgba(255,215,0,0.4)'  : 'rgba(80,80,80,0.25)'
     ctx.lineWidth   = 1
-    roundRect(ctx, undoX, undoY, undoW, undoH, 13); ctx.fill(); ctx.stroke()
+    roundRect(ctx, undoX, undoY, undoW, btnH, btnR); ctx.fill(); ctx.stroke()
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = canUndo ? '#FFD700' : '#444'
-    ctx.fillText(`撤销 x${logic.undoLeft}`, undoX + undoW / 2, row2Y)
+    ctx.fillText(`↩ 撤销 x${logic.undoLeft}`, undoX + undoW / 2, row2Y)
     ctx.restore()
-    this._undoBtn = { x: undoX, y: undoY, w: undoW, h: undoH }
+    this._undoBtn = { x: undoX, y: undoY, w: undoW, h: btnH }
   }
 
   _drawDivider(ctx, width, logic) {
@@ -364,10 +406,10 @@ export default class GameScene {
     ctx.font = '10px sans-serif'
     ctx.fillStyle = 'rgba(255,215,0,0.38)'
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-    ctx.fillText(`槽 ${logic.slot.length}/${CONFIG.SLOT_MAX}`, 10, y)
+    ctx.fillText(`槽 ${logic.slot.length}/${logic.slotMax}`, 10, y)
 
     // 右侧显示槽满警告
-    if (logic.slot.length >= CONFIG.SLOT_MAX) {
+    if (logic.slot.length >= logic.slotMax) {
       const warn = this.frame % 30 < 15
       ctx.textAlign = 'right'
       ctx.fillStyle = warn ? 'rgba(255,80,80,0.8)' : 'rgba(255,80,80,0.4)'
@@ -518,57 +560,213 @@ export default class GameScene {
   }
 
   _drawSlot(ctx, logic) {
-    const sz = this.cellSize
-    for (let i = 0; i < CONFIG.SLOT_MAX; i++) {
+    const sz      = this.cellSize
+    const slotMax = logic.slotMax   // 扩槽后可能是7
+    for (let i = 0; i < slotMax; i++) {
       const { x, y } = this.slotXY(i)
       const car      = logic.slot[i]
       const isFlash  = (this._insertFlash > 0 && i === this._insertIdx)
+      // 扩槽第7格弹入动画
+      const isNewSlot = (slotMax === CONFIG.SLOT_MAX_EXPANDED && i === CONFIG.SLOT_MAX_EXPANDED - 1)
+      const expandScale = isNewSlot && this._expandAnim > 0
+        ? 0.6 + 0.4 * (1 - this._expandAnim / 18) : 1
+
+      ctx.save()
+      if (expandScale < 1) {
+        ctx.translate(x + sz / 2, y + sz / 2)
+        ctx.scale(expandScale, expandScale)
+        ctx.translate(-(x + sz / 2), -(y + sz / 2))
+      }
 
       // 槽位底框
-      ctx.save()
-      ctx.strokeStyle = car ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.12)'
-      ctx.lineWidth   = 1.5
+      ctx.strokeStyle = car ? 'rgba(255,215,0,0.4)' : (isNewSlot ? 'rgba(79,195,247,0.5)' : 'rgba(255,255,255,0.12)')
+      ctx.lineWidth   = isNewSlot ? 2 : 1.5
       ctx.setLineDash(car ? [] : [3, 3])
-      ctx.fillStyle   = car ? 'rgba(255,215,0,0.04)' : 'rgba(255,255,255,0.025)'
+      ctx.fillStyle   = car ? 'rgba(255,215,0,0.04)' : (isNewSlot ? 'rgba(79,195,247,0.06)' : 'rgba(255,255,255,0.025)')
       roundRect(ctx, x, y, sz, sz, 7); ctx.fill(); ctx.stroke()
       ctx.setLineDash([])
-      ctx.restore()
 
       if (car) {
-        ctx.save()
         if (isFlash) ctx.globalAlpha = 0.85 + 0.15 * this._insertFlash / 14
-
-        // 主色块
         ctx.fillStyle = car.color
         roundRect(ctx, x, y, sz, sz, 7); ctx.fill()
-
-        // 轻高光
         const hg = ctx.createLinearGradient(x, y, x, y + sz * 0.36)
         hg.addColorStop(0, 'rgba(255,255,255,0.28)')
         hg.addColorStop(1, 'rgba(255,255,255,0)')
         ctx.fillStyle = hg
         roundRect(ctx, x, y, sz, sz * 0.36, 7); ctx.fill()
-
-        // 插入高亮白描边
         if (isFlash) {
           ctx.strokeStyle = `rgba(255,255,255,${0.85 * this._insertFlash / 14})`
           ctx.lineWidth   = 2
           roundRect(ctx, x, y, sz, sz, 7); ctx.stroke()
         }
-
         ctx.font = `${sz * 0.44}px sans-serif`
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-        ctx.fillText(car.icon, x + sz/2, y + sz/2)
-        ctx.restore()
+        ctx.fillText(car.icon, x + sz / 2, y + sz / 2)
       } else {
-        ctx.save()
         ctx.font = `${Math.max(9, sz * 0.21)}px sans-serif`
-        ctx.fillStyle = 'rgba(255,255,255,0.1)'
+        ctx.fillStyle = isNewSlot ? 'rgba(79,195,247,0.4)' : 'rgba(255,255,255,0.1)'
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-        ctx.fillText(`${i + 1}`, x + sz/2, y + sz/2)
+        ctx.fillText(isNewSlot ? '＋' : `${i + 1}`, x + sz / 2, y + sz / 2)
+      }
+      ctx.restore()
+    }
+  }
+
+  // ========== 道具按钮行 ==========
+  _drawPropBtns(ctx, width, logic) {
+    const y    = this.propBtnTop
+    const h    = this.propBtnH
+    const btnW = Math.floor((width - 48) / 2)
+    const gap  = 12
+    const startX = Math.floor((width - (btnW * 2 + gap)) / 2)
+
+    this._propBtns = []
+
+    const defs = [
+      {
+        type:  'expand',
+        icon:  '➕',
+        label: '扩槽',
+        sub:   logic.slotMax > CONFIG.SLOT_MAX ? '已激活' : `×${logic.expandLeft}`,
+        left:  logic.expandLeft,
+        maxed: logic.slotMax >= CONFIG.SLOT_MAX_EXPANDED,
+        color: '#4FC3F7',
+      },
+      {
+        type:  'shuffle',
+        icon:  '🔀',
+        label: '洗牌',
+        sub:   `×${logic.shuffleLeft}`,
+        left:  logic.shuffleLeft,
+        maxed: false,
+        color: '#81C784',
+      },
+    ]
+
+    defs.forEach((def, i) => {
+      const x     = startX + i * (btnW + gap)
+      const empty = def.left <= 0
+      const flash = this._propFlash && this._propFlash.type === def.type && this._propFlash.frame > 0
+      const activated = def.type === 'expand' && def.maxed
+
+      this._propBtns.push({ type: def.type, x, y, w: btnW, h })
+
+      // 十六进制色转 rgb 字符串
+      const rgb = hexToRgb(def.color)
+
+      ctx.save()
+      // 背景
+      ctx.fillStyle = flash
+        ? `rgba(${rgb},0.45)`
+        : (empty ? 'rgba(35,35,45,0.7)' : `rgba(${rgb},0.12)`)
+      ctx.strokeStyle = flash
+        ? `rgba(${rgb},1)`
+        : (empty ? 'rgba(80,80,95,0.4)' : (activated ? `rgba(${rgb},0.9)` : `rgba(${rgb},0.5)`))
+      ctx.lineWidth = flash || activated ? 2 : 1.5
+      roundRect(ctx, x, y, btnW, h, 12); ctx.fill(); ctx.stroke()
+
+      // 激活态顶部亮线
+      if (activated && !empty) {
+        const ag = ctx.createLinearGradient(x, y, x + btnW, y)
+        ag.addColorStop(0,   `rgba(${rgb},0)`)
+        ag.addColorStop(0.5, `rgba(${rgb},0.7)`)
+        ag.addColorStop(1,   `rgba(${rgb},0)`)
+        ctx.fillStyle = ag
+        ctx.fillRect(x + 12, y, btnW - 24, 2)
+      }
+      ctx.restore()
+
+      // 图标（独立 save 避免被裁剪）
+      ctx.save()
+      ctx.globalAlpha = empty ? 0.3 : 1
+      ctx.font = '20px sans-serif'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(def.icon, x + 28, y + h / 2)
+      ctx.restore()
+
+      // 文字
+      ctx.save()
+      ctx.globalAlpha = empty ? 0.35 : 1
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      ctx.font = `bold 14px sans-serif`
+      ctx.fillStyle = empty ? '#666' : (flash ? '#fff' : def.color)
+      ctx.fillText(def.label, x + 46, y + h / 2 - 8)
+      ctx.font = '11px sans-serif'
+      ctx.fillStyle = empty ? '#555' : 'rgba(255,255,255,0.55)'
+      ctx.fillText(empty ? '已用完' : def.sub, x + 46, y + h / 2 + 9)
+      ctx.restore()
+
+      // 用完时右侧「+获取」角标
+      if (empty) {
+        const tagX = x + btnW - 36, tagY = y + h / 2 - 10, tagW = 32, tagH = 20
+        ctx.save()
+        ctx.fillStyle   = 'rgba(255,180,0,0.18)'
+        ctx.strokeStyle = 'rgba(255,180,0,0.5)'
+        ctx.lineWidth = 1
+        roundRect(ctx, tagX, tagY, tagW, tagH, 6); ctx.fill(); ctx.stroke()
+        ctx.font = '10px sans-serif'
+        ctx.fillStyle   = '#FFD700'
+        ctx.textAlign   = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText('+获取', tagX + tagW / 2, tagY + tagH / 2)
         ctx.restore()
       }
-    }
+    })
+  }
+
+  // ========== 获取道具弹层 ==========
+  _drawAdModal(ctx, width, height) {
+    if (!this._adModal) return
+    const { type } = this._adModal
+    const typeLabel = type === 'expand' ? '➕ 扩槽' : '🔀 洗牌'
+
+    ctx.save()
+    ctx.fillStyle = 'rgba(0,0,10,0.75)'
+    ctx.fillRect(0, 0, width, height)
+
+    const cw = width - 48, ch = 230
+    const cx = (width - cw) / 2, cy = (height - ch) / 2
+    ctx.fillStyle   = 'rgba(16,22,42,0.98)'
+    ctx.strokeStyle = 'rgba(255,215,0,0.25)'
+    ctx.lineWidth   = 1.2
+    roundRect(ctx, cx, cy, cw, ch, 18); ctx.fill(); ctx.stroke()
+
+    // 标题
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#FFD700'
+    ctx.fillText(`获取 ${typeLabel} 道具 ×1`, cx + cw / 2, cy + 36)
+    ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(180,200,240,0.6)'
+    ctx.fillText('选择一种方式获取', cx + cw / 2, cy + 60)
+
+    // 看广告按钮
+    const btnX = cx + 20, btnW2 = cw - 40, btnH2 = 44
+    const y1   = cy + 80
+    ctx.fillStyle   = 'rgba(255,193,7,0.15)'
+    ctx.strokeStyle = 'rgba(255,193,7,0.55)'
+    ctx.lineWidth   = 1.5
+    roundRect(ctx, btnX, y1, btnW2, btnH2, 12); ctx.fill(); ctx.stroke()
+    ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#FFD700'
+    ctx.fillText('📺  看广告获取', cx + cw / 2, y1 + btnH2 / 2)
+
+    // 分享按钮
+    const y2 = y1 + btnH2 + 10
+    ctx.fillStyle   = 'rgba(76,175,80,0.15)'
+    ctx.strokeStyle = 'rgba(76,175,80,0.55)'
+    ctx.lineWidth   = 1.5
+    roundRect(ctx, btnX, y2, btnW2, btnH2, 12); ctx.fill(); ctx.stroke()
+    ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#81C784'
+    ctx.fillText('🔗  分享给好友获取', cx + cw / 2, y2 + btnH2 / 2)
+
+    // 关闭 ×
+    ctx.font = '20px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.fillText('✕', cx + cw - 16, cy + 18)
+
+    // 记录命中区域
+    this._adModal.btnWatch = { x: btnX, y: y1, w: btnW2, h: btnH2 }
+    this._adModal.btnShare = { x: btnX, y: y2, w: btnW2, h: btnH2 }
+    this._adModal.btnClose = { x: cx + cw - 30, y: cy + 4, w: 30, h: 30 }
+
+    ctx.restore()
   }
 
   _drawWin(ctx, width, height) {
@@ -606,11 +804,26 @@ export default class GameScene {
   }
 
   // ========== 触摸 ==========
+  _hitTest(x, y, rect) {
+    return rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h
+  }
+
   onTouchEnd(x, y) {
+    // ── ① 道具获取弹层优先消费 ──
+    if (this._adModal) {
+      const { btnWatch, btnShare, btnClose, type } = this._adModal
+      if (this._hitTest(x, y, btnClose)) { this._adModal = null; return }
+      if (this._hitTest(x, y, btnWatch)) { this._adModal = null; this._showRewardedAd(type); return }
+      if (this._hitTest(x, y, btnShare)) { this._adModal = null; this._shareForProp(type); return }
+      return  // 弹层外点击不穿透
+    }
+
+    // ── ② 撤销按钮 ──
     const ub = this._undoBtn
     if (ub && x >= ub.x && x <= ub.x + ub.w && y >= ub.y && y <= ub.y + ub.h) {
       const ok = this.logic.undo()
       if (ok) {
+        AudioManager.playUndo()
         this._undoFlash   = 18
         this._insertFlash = 0
         this._insertIdx   = -1
@@ -623,6 +836,15 @@ export default class GameScene {
 
     if (this.logic.gameOver || this.logic.win) return
 
+    // ── ③ 道具按钮 ──
+    for (const btn of this._propBtns) {
+      if (this._hitTest(x, y, btn)) {
+        this._onPropBtn(btn.type)
+        return
+      }
+    }
+
+    // ── ④ 棋盘格 ──
     const sz = this.cellSize
     for (let r = 0; r < CONFIG.BOARD_ROWS; r++) {
       for (let c = 0; c < CONFIG.BOARD_COLS; c++) {
@@ -630,10 +852,10 @@ export default class GameScene {
         if (x >= pos.x && x <= pos.x + sz && y >= pos.y && y <= pos.y + sz) {
           const result = this.logic.clickCell(r, c)
           if (result === 'blocked') {
-            const cx = pos.x + sz / 2
-            const cy = pos.y + sz / 2
-            this.floatTexts.push(new FloatText('被遮挡', cx, cy, '#FF6B6B'))
+            AudioManager.playBlocked()
+            this.floatTexts.push(new FloatText('被遮挡', pos.x + sz / 2, pos.y + sz / 2, '#FF6B6B'))
           } else if (result) {
+            AudioManager.playInsert()
             this.selectedCell = { r, c }
             setTimeout(() => { this.selectedCell = null }, 180)
           }
@@ -641,6 +863,86 @@ export default class GameScene {
         }
       }
     }
+  }
+
+  // ─── 道具按钮业务逻辑 ───
+  _onPropBtn(type) {
+    const logic = this.logic
+    const W = this.game.width
+    const floatY = this.slotTop - 24
+
+    if (type === 'expand') {
+      if (logic.slotMax >= CONFIG.SLOT_MAX_EXPANDED) {
+        this.floatTexts.push(new FloatText('已是最大槽位', W / 2, floatY, '#4FC3F7'))
+        return
+      }
+      if (logic.expandLeft <= 0) { this._adModal = { type }; return }
+      const res = logic.useExpand()
+      if (res === 'ok') {
+        this._propFlash  = { type, frame: 14 }
+        this._expandAnim = 18
+        this.floatTexts.push(new FloatText('➕ 槽位扩展至7！', W / 2, floatY, '#4FC3F7'))
+        AudioManager.playMatch()
+      }
+    }
+
+    if (type === 'shuffle') {
+      if (logic.shuffleLeft <= 0) { this._adModal = { type }; return }
+      const res = logic.useShuffle()
+      if (res === 'ok') {
+        this._propFlash   = { type, frame: 14 }
+        this._shuffleAnim = 22
+        this.floatTexts.push(new FloatText('🔀 棋盘已洗牌！', W / 2, floatY, '#81C784'))
+        AudioManager.playUndo()
+      } else if (res === 'board_empty') {
+        this.floatTexts.push(new FloatText('棋盘已空', W / 2, floatY, '#888'))
+      }
+    }
+  }
+
+  // ─── 看激励视频广告 ───
+  _showRewardedAd(propType) {
+    try {
+      const ad = wx.createRewardedVideoAd({ adUnitId: 'YOUR_AD_UNIT_ID' })
+      ad.onError(() => this._shareForProp(propType))
+      ad.onClose((res) => {
+        if (res && res.isEnded) {
+          this._grantProp(propType, '广告')
+        } else {
+          this.floatTexts.push(new FloatText('请完整观看~', this.game.width / 2, this.game.height / 2, '#FF9800'))
+        }
+      })
+      ad.show().catch(() => this._shareForProp(propType))
+    } catch (e) {
+      this._shareForProp(propType)
+    }
+  }
+
+  // ─── 分享获取道具 ───
+  _shareForProp(propType) {
+    wx.shareAppMessage({
+      title:    '我在「赢了个赢」里三消赢豪车！来挑战我！',
+      imageUrl: SHARE_CONFIG.imageUrl,
+      query: `from=share&prop=${propType}`,
+      success: () => this._grantProp(propType, '分享'),
+      fail: () => this.floatTexts.push(new FloatText('分享取消', this.game.width / 2, this.game.height / 2, '#888')),
+    })
+  }
+
+  // ─── 实际发放道具 ───
+  _grantProp(propType, source) {
+    if (propType === 'expand') {
+      this.logic.expandLeft++
+      addExtraProp('expand', 1)
+    } else {
+      this.logic.shuffleLeft++
+      addExtraProp('shuffle', 1)
+    }
+    const label = propType === 'expand' ? '➕ 扩槽' : '🔀 洗牌'
+    this.floatTexts.push(new FloatText(
+      `🎁 ${label} ×1（${source}获得）`,
+      this.game.width / 2, this.game.height / 2 - 30, '#FFD700'
+    ))
   }
 
   // ========== 底部信息面板 ==========
