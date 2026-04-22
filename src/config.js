@@ -100,4 +100,169 @@ export const CONFIG = {
   // 道具配置
   PROPS_PER_LEVEL: { expand: 1, shuffle: 1 },  // 每关固定配发
   SLOT_MAX_EXPANDED: 7,                         // 扩槽后的上限
+
+  // ==================== 成就系统 ====================
+  // id:        唯一标识（存储键）
+  // icon:      展示 emoji
+  // name:      成就名称
+  // desc:      解锁条件描述
+  // color:     主题色
+  // check(stats): 接收游戏统计数据，返回 true 表示已达成
+  ACHIEVEMENTS: [
+    {
+      id: 'first_win',
+      icon: '🚗',
+      name: '初出茅庐',
+      desc: '通关第 1 关',
+      color: '#2ECC71',
+      check: (s) => s.levelsPassed >= 1,
+    },
+    {
+      id: 'win_5',
+      icon: '🏅',
+      name: '五关连胜',
+      desc: '通关 5 关',
+      color: '#3498DB',
+      check: (s) => s.levelsPassed >= 5,
+    },
+    {
+      id: 'win_10',
+      icon: '🥈',
+      name: '老司机',
+      desc: '通关 10 关',
+      color: '#9B59B6',
+      check: (s) => s.levelsPassed >= 10,
+    },
+    {
+      id: 'win_20',
+      icon: '🥇',
+      name: '赛车王者',
+      desc: '通关 20 关',
+      color: '#F39C12',
+      check: (s) => s.levelsPassed >= 20,
+    },
+    {
+      id: 'win_all',
+      icon: '🏆',
+      name: '传奇车手',
+      desc: '通关全部 30 关',
+      color: '#FFD700',
+      check: (s) => s.levelsPassed >= 30,
+    },
+    {
+      id: 'cars_50',
+      icon: '🚙',
+      name: '收藏新手',
+      desc: '累计赢得 50 辆车',
+      color: '#1ABC9C',
+      check: (s) => s.totalCarsWon >= 50,
+    },
+    {
+      id: 'cars_200',
+      icon: '🏎',
+      name: '车库大亨',
+      desc: '累计赢得 200 辆车',
+      color: '#E74C3C',
+      check: (s) => s.totalCarsWon >= 200,
+    },
+    {
+      id: 'cars_500',
+      icon: '🛻',
+      name: '超级收藏家',
+      desc: '累计赢得 500 辆车',
+      color: '#E91E8C',
+      check: (s) => s.totalCarsWon >= 500,
+    },
+    {
+      id: 'combo_3',
+      icon: '⚡',
+      name: '连消达人',
+      desc: '单关触发连消 ×3',
+      color: '#F39C12',
+      check: (s) => s.maxCombo >= 3,
+    },
+    {
+      id: 'combo_5',
+      icon: '🔥',
+      name: '连消大师',
+      desc: '单关触发连消 ×5',
+      color: '#E74C3C',
+      check: (s) => s.maxCombo >= 5,
+    },
+    {
+      id: 'three_stars',
+      icon: '⭐',
+      name: '完美司机',
+      desc: '首次拿到 3 星',
+      color: '#FFD700',
+      check: (s) => s.threeStarCount >= 1,
+    },
+    {
+      id: 'three_stars_5',
+      icon: '🌟',
+      name: '星耀车手',
+      desc: '累计获得 5 个 3 星',
+      color: '#FFD700',
+      check: (s) => s.threeStarCount >= 5,
+    },
+    {
+      id: 'use_undo',
+      icon: '\u21a9',
+      name: '谨慎驾驶',
+      desc: '使用撤销 1 次',
+      color: '#4FC3F7',
+      check: (s) => s.totalUndos >= 1,
+    },
+    {
+      id: 'use_shuffle',
+      icon: '🔀',
+      name: '洗牌高手',
+      desc: '使用洗牌 3 次',
+      color: '#81C784',
+      check: (s) => s.totalShuffles >= 3,
+    },
+    {
+      id: 'share_friend',
+      icon: '📣',
+      name: '分享达人',
+      desc: '分享游戏给好友',
+      color: '#07C160',
+      check: (s) => s.totalShares >= 1,
+    },
+    // ── 每日挑战专属成就 ──
+    {
+      id: 'daily_first',
+      icon: '📅',
+      name: '今日挑战者',
+      desc: '首次完成每日挑战',
+      color: '#00BCD4',
+      check: (s) => (s.dailyWins || 0) >= 1,
+    },
+    {
+      id: 'daily_streak_3',
+      icon: '🔥',
+      name: '三连冠',
+      desc: '连续 3 天完成每日挑战',
+      color: '#FF5722',
+      check: (s) => (s.dailyStreak || 0) >= 3,
+    },
+    {
+      id: 'daily_streak_7',
+      icon: '👑',
+      name: '每日常青树',
+      desc: '连续 7 天完成每日挑战',
+      color: '#FFD700',
+      check: (s) => (s.dailyStreak || 0) >= 7,
+    },
+  ],
+
+  // ==================== 每日挑战配置 ====================
+  // 每天用日期字符串（YYYYMMDD）作为随机种子，生成当日固定关卡参数
+  // 难度固定偏高：carTypes 6-8，layerMax 4，setCount 4-6，步均约 1.18
+  DAILY_CHALLENGE: {
+    carTypesPool:  [6, 7, 7, 8, 8],
+    layerMaxPool:  [3, 4, 4, 4, 5],
+    setCountPool:  [4, 4, 5, 5, 6],
+    ratioPool:     [1.20, 1.18, 1.18, 1.17, 1.16],
+  },
 }

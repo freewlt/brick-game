@@ -32,10 +32,11 @@ export default class GameLogic {
   }
 
   // ========== 关卡初始化 ==========
-  initLevel(levelIdx) {
+  // customCfg: 可选，传入时跳过 CONFIG.LEVELS 查表（每日挑战专用）
+  initLevel(levelIdx, customCfg = null) {
     this.reset()
     this.level = levelIdx
-    const cfg = CONFIG.LEVELS[Math.min(levelIdx, CONFIG.LEVELS.length - 1)]
+    const cfg = customCfg || CONFIG.LEVELS[Math.min(levelIdx, CONFIG.LEVELS.length - 1)]
     this.maxMoves = cfg.maxMoves || 0
     this.undoLeft = 1
 
@@ -332,6 +333,37 @@ export default class GameLogic {
     if (ratio >= 0.5) return 3
     if (ratio >= 0.3) return 2
     return 1
+  }
+
+  // ========== ⑤ 实时星级（游戏进行中用，参考开心消消乐）==========
+  // 进度分（carsWon / totalCars）× 效率分（步数余量）→ 综合得出 0-3 星
+  calcCurrentStars() {
+    if (this.win)      return this.calcStars()
+    if (this.gameOver) return 0
+
+    // carsWon 每次消除 += MATCH_COUNT(3)，totalCars = 全部车块数
+    const progress  = this.totalCars > 0 ? this.carsWon / this.totalCars : 0   // 0~1
+
+    // 效率分：剩余步数 / 最大步数（无步数限制时按步均给效率）
+    let efficiency
+    if (this.maxMoves === 0) {
+      // 无步数限制：按目前步均是否优秀（步数 / 已消车数）
+      const avgRatio = this.carsWon > 0 ? this.moves / this.carsWon : 0
+      efficiency = avgRatio <= 1.2 ? 1.0 : avgRatio <= 1.8 ? 0.6 : 0.3
+    } else {
+      efficiency = this.movesLeft / this.maxMoves   // 0~1
+    }
+
+    // 综合得分（进度占 60%，效率占 40%）
+    const score = progress * 0.6 + efficiency * 0.4
+
+    // 阈值映射 → 星数
+    // 游戏开始 efficiency≈1 → score≈0.4，满足1星阈值(≥0.20)，随进度提升
+    // 通关后由 calcStars() 精确评定，阈值可比通关宽松一点保证连贯体验
+    if (score >= 0.70) return 3
+    if (score >= 0.45) return 2
+    if (score >= 0.20) return 1
+    return 0
   }
 
   // ========== 查询接口 ==========

@@ -3,7 +3,11 @@ import GameLogic from '../logic/GameLogic.js'
 import { CONFIG } from '../config.js'
 import { roundRect } from '../utils/draw.js'
 import AudioManager from '../utils/audio.js'
-import { addExtraProp, SHARE_CONFIG } from '../utils/storage.js'
+import { addExtraProp, SHARE_CONFIG,
+  getAchievementStats, saveAchievementStats, checkAndUnlockAchievements,
+} from '../utils/storage.js'
+import { CONFIG as _CFG } from '../config.js'  // 成就列表引用
+import AchievementUnlockPopup from './AchievementUnlockPopup.js'
 
 // 飘字动画
 class FloatText {
@@ -54,9 +58,13 @@ function hexToRgb(hex) {
 }
 
 export default class GameScene {
-  constructor(game, levelIdx = 0) {
+  // customCfg: 每日挑战专用关卡参数，传入时不走 CONFIG.LEVELS
+  // onComplete: 每日挑战完成回调 (isWin, score, carsWon, stars) => void
+  constructor(game, levelIdx = 0, customCfg = null, onComplete = null) {
     this.game = game
     this.startLevel = levelIdx
+    this._customCfg  = customCfg    // 每日挑战自定义参数
+    this._onComplete = onComplete   // 每日挑战完成回调
     this.logic = new GameLogic()
     this.floatTexts   = []
     this.particles    = []
@@ -76,10 +84,17 @@ export default class GameScene {
     this._adModal     = null  // 获取道具弹层 {type, ...btnRects}
     this._shuffleAnim = 0     // 洗牌棋盘绿光帧计数
     this._expandAnim  = 0     // 扩槽第7格弹入帧计数
+    // 成就追踪（本关会话）
+    this._sessionMaxCombo  = 0   // 本关最高连消
+    this._sessionUndos     = 0   // 本关撤销次数
+    this._sessionShuffles  = 0   // 本关洗牌次数
+    this._sessionShares    = 0   // 本关分享次数
+    this._achChecked       = false  // 胜利时只检测一次
+    this._achPopup         = new AchievementUnlockPopup()
   }
 
   init() {
-    this.logic.initLevel(this.startLevel)
+    this.logic.initLevel(this.startLevel, this._customCfg)
     this.lastCarsWon  = 0
     this.lastSlotLen  = 0
     this._resultScheduled = false
@@ -93,6 +108,13 @@ export default class GameScene {
     this._adModal     = null
     this._shuffleAnim = 0
     this._expandAnim  = 0
+    // 成就追踪重置
+    this._sessionMaxCombo  = 0
+    this._sessionUndos     = 0
+    this._sessionShuffles  = 0
+    this._sessionShares    = 0
+    this._achChecked       = false
+    this._achPopup         = new AchievementUnlockPopup()
     AudioManager.playBGM()
   }
 
@@ -107,17 +129,17 @@ export default class GameScene {
   get cellGap()    { return 4 }
   get cellStep()   { return this.cellSize + this.cellGap }
   get safeTop()    { return this.game.safeTop }          // 动态安全顶，来自 game.js
-  get headerH()    { return this.game.safeTop + 82 }     // 安全区 + 两行内容(82px)
-  get boardTop()   { return this.headerH + 20 }   // header → 棋盘 间距 20px
+  get headerH()    { return this.game.safeTop + 88 }     // 安全区 + 两行 + 分隔线间距(88px)
+  get boardTop()   { return this.headerH + 10 }          // header → 棋盘 间距 10px
   get boardH()     { return CONFIG.BOARD_ROWS * this.cellStep }
-  get slotTop()    { return this.boardTop + this.boardH + 22 }
-  get propBtnTop() { return this.slotTop + this.cellSize + 8 }   // 道具按钮行
-  get propBtnH()   { return 44 }
-  get bottomPanelTop() { return this.propBtnTop + this.propBtnH + 6 }  // 往下移
+  get slotTop()    { return this.boardTop + this.boardH + 32 }
+  get propBtnTop() { return this.slotTop + this.cellSize + 12 }   // 道具按钮行
+  get propBtnH()   { return 52 }
+  get bottomPanelTop() { return this.propBtnTop + this.propBtnH + 6 }
 
   get cellSize() {
     // 宽度优先：按列数计算最大格子尺寸
-    const pad      = 10 * 2
+    const pad      = 8 * 2
     const colGaps  = (CONFIG.BOARD_COLS - 1) * this.cellGap
     const byWidth  = Math.floor((this.game.width - pad - colGaps) / CONFIG.BOARD_COLS)
     return byWidth
@@ -172,6 +194,8 @@ export default class GameScene {
       } else {
         AudioManager.playMatch()
       }
+      // 追踪本关最高连消
+      if (logic.combo > this._sessionMaxCombo) this._sessionMaxCombo = logic.combo
       for (let i = 0; i < 18; i++) {
         this.particles.push(new MatchParticle(cx, cy,
           CONFIG.COLORS[Math.floor(Math.random() * CONFIG.COLORS.length)]))
@@ -185,13 +209,44 @@ export default class GameScene {
     }
     this.lastSlotLen = logic.slot.length
 
+    // 成就弹窗更新
+    this._achPopup.update()
+
     if ((logic.gameOver || logic.win) && !this._resultScheduled) {
       this._resultScheduled = true
       const stars = logic.calcStars()
-      if (logic.win) AudioManager.playWin()
-      else           AudioManager.playLose()
+      if (logic.win) {
+        AudioManager.playWin()
+        // ── 成就：累积统计并检测 ──
+        if (!this._achChecked) {
+          this._achChecked = true
+          const stats = getAchievementStats()
+          stats.levelsPassed  = (stats.levelsPassed  || 0) + 1
+          stats.totalCarsWon  = (stats.totalCarsWon  || 0) + logic.carsWon
+          stats.totalUndos    = (stats.totalUndos    || 0) + this._sessionUndos
+          stats.totalShuffles = (stats.totalShuffles || 0) + this._sessionShuffles
+          stats.totalShares   = (stats.totalShares   || 0) + this._sessionShares
+          if (this._sessionMaxCombo > (stats.maxCombo || 0)) stats.maxCombo = this._sessionMaxCombo
+          if (stars === 3) stats.threeStarCount = (stats.threeStarCount || 0) + 1
+          saveAchievementStats(stats)
+          const newly = checkAndUnlockAchievements(_CFG.ACHIEVEMENTS, stats)
+          if (newly.length > 0) {
+            // 延迟1.2秒再弹出庆祝弹窗（让玩家先看到通关动画）
+            setTimeout(() => {
+              this._achPopup.show(newly)
+            }, 1200)
+          }
+        }
+      } else {
+        AudioManager.playLose()
+      }
       setTimeout(() => {
-        this.game.showResult(logic.score, logic.carsWon, logic.level, logic.win, stars)
+        if (this._onComplete) {
+          // 每日挑战模式：通过回调返回结果，不走普通 showResult
+          this._onComplete(logic.win, logic.score, logic.carsWon, stars)
+        } else {
+          this.game.showResult(logic.score, logic.carsWon, logic.level, logic.win, stars)
+        }
       }, 1000)
     }
   }
@@ -206,22 +261,18 @@ export default class GameScene {
     ctx.save()
     ctx.translate(shakeX, shakeY)
 
-    // 背景
+    // ── 背景：天蓝渐变（亮色主题）──
     const bg = ctx.createLinearGradient(0, 0, 0, height)
-    bg.addColorStop(0, '#080c18')
-    bg.addColorStop(0.5, '#0d1020')
-    bg.addColorStop(1, '#0a0d1a')
+    bg.addColorStop(0,   '#5BC8F5')
+    bg.addColorStop(0.5, '#84D9FF')
+    bg.addColorStop(1,   '#B8EEFF')
     ctx.fillStyle = bg
     ctx.fillRect(0, 0, width, height)
 
-    // ── 棋盘区棋格背景纹理 ──
-    this._drawGridTexture(ctx)
-
     this._drawHeader(ctx, width, logic)
     this._drawBoard(ctx, logic)
-    this._drawDivider(ctx, width, logic)
     this._drawSlot(ctx, logic)
-    this._drawPropBtns(ctx, width, logic)      // 道具按钮行
+    this._drawPropBtns(ctx, width, logic)
     this._drawBottomPanel(ctx, width, height, logic)
 
     this.particles.forEach(p => p.draw(ctx))
@@ -230,8 +281,8 @@ export default class GameScene {
     // 洗牌绿色光晕
     if (this._shuffleAnim > 0) {
       ctx.save()
-      ctx.globalAlpha = (this._shuffleAnim / 20) * 0.22
-      ctx.fillStyle = '#81C784'
+      ctx.globalAlpha = (this._shuffleAnim / 20) * 0.18
+      ctx.fillStyle = '#2ECC71'
       ctx.fillRect(this.boardLeft - 6, this.boardTop - 6,
         CONFIG.BOARD_COLS * this.cellStep + 12,
         CONFIG.BOARD_ROWS * this.cellStep + 12)
@@ -240,7 +291,7 @@ export default class GameScene {
 
     if (this._undoFlash > 0) {
       ctx.save()
-      ctx.globalAlpha = this._undoFlash / 18 * 0.4
+      ctx.globalAlpha = this._undoFlash / 18 * 0.25
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, width, height)
       ctx.restore()
@@ -248,7 +299,7 @@ export default class GameScene {
 
     if (this._levelFlash > 0) {
       ctx.save()
-      ctx.globalAlpha = this._levelFlash / 40 * 0.35
+      ctx.globalAlpha = this._levelFlash / 40 * 0.22
       ctx.fillStyle = '#FFD700'
       ctx.fillRect(0, 0, width, height)
       ctx.restore()
@@ -257,198 +308,253 @@ export default class GameScene {
     if (logic.win)           this._drawWin(ctx, width, height)
     else if (logic.gameOver) this._drawGameOver(ctx, width, height)
 
+    // 成就解锁弹窗（最上层）
+    this._achPopup.draw(ctx, width, height)
+
     // 道具获取弹层（最后渲染，覆盖在最上层）
     if (this._adModal) this._drawAdModal(ctx, width, height)
 
     ctx.restore()
   }
 
-  // ========== Header：紧凑两行，位于系统胶囊下方 ==========
+  // ========== Header：对标目标UI（天蓝背景，无面板）==========
   _drawHeader(ctx, width, logic) {
     const levelNum  = logic.level + 1
-    const progress  = logic.totalCars > 0
-      ? 1 - logic.getRemainingCount() / logic.totalCars : 1
     const hasLimit  = logic.maxMoves > 0
     const movesLeft = logic.movesLeft
     const isWarn    = hasLimit && movesLeft <= 10
-    const padX      = 12
-    const safe      = this.safeTop   // 88px，系统按钮下方
+    const padX      = 16
+    const safe      = this.safeTop
 
-    // ── Header 背景：深色 + 底部彩虹渐变光条 ──
+    // ── 行1：「第N关」金色 + 「目标 ★★★」+ 撤销按钮 ──
+    const row1Y = safe + 28
+
+    // 「第N关」金色粗体（左）
     ctx.save()
-    ctx.fillStyle = 'rgba(8,10,22,0.99)'
-    ctx.fillRect(0, 0, width, this.headerH)
-
-    // 底部装饰光条（彩虹细线）
-    const rainbow = ctx.createLinearGradient(0, 0, width, 0)
-    rainbow.addColorStop(0,    'rgba(255,80,80,0)')
-    rainbow.addColorStop(0.15, 'rgba(255,140,0,0.55)')
-    rainbow.addColorStop(0.35, 'rgba(255,215,0,0.70)')
-    rainbow.addColorStop(0.55, 'rgba(50,220,120,0.60)')
-    rainbow.addColorStop(0.75, 'rgba(80,160,255,0.55)')
-    rainbow.addColorStop(0.9,  'rgba(180,80,255,0.45)')
-    rainbow.addColorStop(1,    'rgba(180,80,255,0)')
-    ctx.fillStyle = rainbow
-    ctx.fillRect(0, this.headerH - 2, width, 2)
-
-    // 顶部极细高光线（增加质感）
-    const topLine = ctx.createLinearGradient(0, 0, width, 0)
-    topLine.addColorStop(0,   'rgba(255,255,255,0)')
-    topLine.addColorStop(0.3, 'rgba(255,255,255,0.06)')
-    topLine.addColorStop(0.7, 'rgba(255,255,255,0.06)')
-    topLine.addColorStop(1,   'rgba(255,255,255,0)')
-    ctx.fillStyle = topLine
-    ctx.fillRect(0, 0, width, 1)
+    ctx.font = 'bold 28px sans-serif'
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    ctx.strokeStyle = 'rgba(120,60,0,0.55)'
+    ctx.lineWidth   = 4
+    ctx.strokeText(`第${levelNum}关`, padX, row1Y)
+    const tg = ctx.createLinearGradient(padX, row1Y - 14, padX, row1Y + 14)
+    tg.addColorStop(0,   '#FFE855')
+    tg.addColorStop(0.5, '#FFD000')
+    tg.addColorStop(1,   '#FFA000')
+    ctx.fillStyle = tg
+    ctx.fillText(`第${levelNum}关`, padX, row1Y)
     ctx.restore()
 
-    // ── 第一行（safe + 15px 居中）：关卡胶囊 + 进度条 ──
-    const row1Y = safe + 15   // row1 内容中线 y = 103
+    // 「目标 ★★★」— 与「第N关」同行，紧跟其右侧
+    // 实时星数：游戏中用 calcCurrentStars()，通关/失败后用 calcStars()
+    const stars = logic.win || logic.gameOver
+      ? (logic.calcStars ? logic.calcStars() : 0)
+      : (logic.calcCurrentStars ? logic.calcCurrentStars() : 0)
+    const titleW = (() => {
+      ctx.save(); ctx.font = 'bold 28px sans-serif'
+      const w = ctx.measureText(`第${levelNum}关`).width; ctx.restore(); return w
+    })()
+    // 「目标」小字起点
+    const starAreaX = padX + titleW + 12
 
-    // 关卡胶囊（左侧）
-    const lvlW = 72, lvlH = 24, lvlX = padX, lvlY = row1Y - lvlH / 2
     ctx.save()
-    ctx.fillStyle   = 'rgba(255,215,0,0.13)'
-    ctx.strokeStyle = 'rgba(255,215,0,0.4)'
-    ctx.lineWidth   = 1
-    roundRect(ctx, lvlX, lvlY, lvlW, lvlH, 12); ctx.fill(); ctx.stroke()
-    ctx.font = '13px sans-serif'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('🏆', lvlX + 12, row1Y)
-    ctx.font = 'bold 12px sans-serif'
-    ctx.fillStyle = '#FFD700'
-    ctx.textAlign = 'left'
-    ctx.fillText(`第${levelNum}关`, lvlX + 23, row1Y)
-    ctx.restore()
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
 
-    // 进度条（胶囊右侧到右边距）
-    const pbX = lvlX + lvlW + 8, pbW = width - pbX - padX, pbH = 5
-    const pbY = row1Y - pbH / 2
-    ctx.save()
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'
-    roundRect(ctx, pbX, pbY, pbW, pbH, 3); ctx.fill()
+    // 「目标」小字（与第N关同一基线，字号小一号）
+    ctx.font = 'bold 13px sans-serif'
+    ctx.fillStyle = 'rgba(255,220,80,0.90)'
+    ctx.fillText('目标', starAreaX, row1Y)
 
-    if (progress <= 0) {
-      // 进度0%：展示星级目标（3颗星图标代替进度条）
-      ctx.font = '11px sans-serif'
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-      ctx.fillStyle = 'rgba(255,215,0,0.55)'
-      ctx.fillText('目标 ⭐⭐⭐', pbX + 4, row1Y)
-    } else {
-      const pg = ctx.createLinearGradient(pbX, 0, pbX + pbW, 0)
-      pg.addColorStop(0, '#FFD700'); pg.addColorStop(1, '#2ECC71')
-      ctx.fillStyle = pg
-      roundRect(ctx, pbX, pbY, Math.max(pbH, pbW * progress), pbH, 3); ctx.fill()
-      ctx.font = '9px sans-serif'
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
-      ctx.fillStyle = 'rgba(255,255,255,0.3)'
-      ctx.fillText(`${Math.round(progress * 100)}%`, pbX + pbW, row1Y)
+    // 三颗大星星（同行，字号20px，间距22px）
+    const starColors    = ['#FFE840', '#FFD000', '#FFA500']   // 亮金/金/橙金（激活，3颗递进）
+    const starColorsDim  = ['rgba(120,100,0,0.35)', 'rgba(100,80,0,0.35)', 'rgba(80,60,0,0.35)']  // 暗淡
+    const starGlows      = ['rgba(255,240,0,0.90)', 'rgba(255,200,0,0.90)', 'rgba(255,140,0,0.90)']
+    const starGlowsDim   = ['rgba(180,150,0,0.20)', 'rgba(150,120,0,0.20)', 'rgba(120,90,0,0.20)']  // 暗淡发光
+    ctx.font = 'bold 20px sans-serif'
+    const targetLabelW = (() => {
+      ctx.save(); ctx.font = 'bold 13px sans-serif'
+      const w = ctx.measureText('目标').width; ctx.restore(); return w
+    })()
+    for (let s = 0; s < 3; s++) {
+      if (s < stars) {
+        ctx.fillStyle   = starColors[s]
+        ctx.shadowColor = starGlows[s]
+        ctx.shadowBlur  = 8
+      } else {
+        ctx.fillStyle   = starColorsDim[s]
+        ctx.shadowColor = starGlowsDim[s]
+        ctx.shadowBlur  = 4
+      }
+      ctx.fillText('★', starAreaX + targetLabelW + 4 + s * 22, row1Y + 1)
     }
+    ctx.shadowBlur = 0
     ctx.restore()
 
-    // ── 第二行（row1Y + 34px）：得分 | 赢车 | 步数 | 撤销按钮 ──
-    const row2Y = row1Y + 34   // row2 内容中线 y = 137
-
+    // 撤销按钮（右上角，圆形图标风格）
     const canUndo = logic.undoLeft > 0 && logic.undoStack.length > 0
-    // 右侧：撤销按钮（音效已移到第一行圆形按钮）
-    const btnH = 26, btnR = 13
-    const undoW = 66
-    const undoX = width - padX - undoW, undoY = row2Y - btnH / 2
+    const undoBtnSz = 36                             // 正方形圆角按钮
+    const undoX = width - padX - undoBtnSz
+    const undoY = row1Y - undoBtnSz / 2
+    ctx.save()
+    // 按钮背景：可用=橙色渐变；不可用=灰蓝
+    if (canUndo) {
+      const uBg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz)
+      uBg.addColorStop(0, '#FFB840')
+      uBg.addColorStop(1, '#FF8000')
+      ctx.fillStyle = uBg
+      ctx.shadowColor = 'rgba(255,140,0,0.50)'
+      ctx.shadowBlur  = 10
+    } else {
+      ctx.fillStyle = 'rgba(98, 167, 236, 0.35)'
+      ctx.shadowBlur = 0
+    }
+    roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz, 10); ctx.fill()
+    ctx.shadowBlur = 0
+    // 顶部高光
+    if (canUndo) {
+      const uHg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz * 0.5)
+      uHg.addColorStop(0, 'rgba(255,255,255,0.35)')
+      uHg.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = uHg
+      roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz * 0.5, { tl:10, tr:10, bl:0, br:0 }); ctx.fill()
+    }
+    // 撤销符号
+    ctx.font = `bold 18px sans-serif`
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = canUndo ? '#FFFFFF' : 'rgba(160,190,220,0.70)'
+    ctx.fillText('↩', undoX + undoBtnSz / 2, row1Y - 3)
+    // 次数小标（右下角角标）
+    ctx.font = `bold 9px sans-serif`
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'
+    ctx.fillStyle = canUndo ? 'rgba(255,255,255,0.90)' : 'rgba(160,190,220,0.60)'
+    ctx.fillText(`×${logic.undoLeft}`, undoX + undoBtnSz - 3, undoY + undoBtnSz - 2)
+    ctx.restore()
+    this._undoBtn = { x: undoX, y: undoY, w: undoBtnSz, h: undoBtnSz }
 
-    const dataW = undoX - padX - 6
+    // ── 行2：得分 / 赢车 / 剩余步（三列，彩色数值）──
+    const row2Y = safe + 60
+    const dataW = width - padX * 2
     const colW  = dataW / 3
 
     const cols = [
-      { label: '得分',  value: `${logic.score}`,    vc: '#FFD700',  lc: 'rgba(255,215,0,0.45)' },
-      { label: '赢车',  value: `x${logic.carsWon}`, vc: '#a0d8ef',  lc: 'rgba(160,216,239,0.45)' },
+      { label: '得分',   value: `${logic.score}`,    vc: 'rgba(255,220,80,1)', lc: 'rgba(255,220,80,1)' },
+      { label: '赢车',   value: `×${logic.carsWon}`, vc: '#fff', lc: '#fff' },
       { label: hasLimit ? '剩余步' : '已用步',
         value: hasLimit ? `${movesLeft}` : `${logic.moves}`,
-        vc: isWarn ? '#FF4444' : '#7FFFD4',
-        lc: isWarn ? 'rgba(255,80,80,0.6)' : 'rgba(127,255,212,0.45)' },
+        vc: '#fff', lc: '#fff' },
     ]
 
     cols.forEach((col, i) => {
       const cx2 = padX + i * colW + colW / 2
       ctx.save()
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.font = '9px sans-serif'
+      ctx.font = '10px sans-serif'
       ctx.fillStyle = col.lc
-      ctx.fillText(col.label, cx2, row2Y - 8)
+      ctx.fillText(col.label, cx2, row2Y - 9)
       const warnBig = i === 2 && isWarn && this.frame % 30 < 15
-      ctx.font = `bold ${warnBig ? 16 : 14}px sans-serif`
+      ctx.font = `bold ${warnBig ? 19 : 16}px sans-serif`
       ctx.fillStyle = col.vc
-      ctx.fillText(col.value, cx2, row2Y + 8)
+      if (i === 2 && isWarn) {
+        ctx.shadowColor = 'rgba(255,220,80,1)'
+        ctx.shadowBlur  = 6
+      }
+      ctx.fillText(col.value, cx2, row2Y + 9)
+      ctx.shadowBlur = 0
       ctx.restore()
     })
 
-    // 撤销按钮（右边）
+    // ── 数据行下方渐变分隔线（彩虹渐变细线，与数据行保留间距）──
+    const divY = safe + 84
     ctx.save()
-    ctx.fillStyle   = canUndo ? 'rgba(255,215,0,0.15)' : 'rgba(60,60,60,0.15)'
-    ctx.strokeStyle = canUndo ? 'rgba(255,215,0,0.4)'  : 'rgba(80,80,80,0.25)'
-    ctx.lineWidth   = 1
-    roundRect(ctx, undoX, undoY, undoW, btnH, btnR); ctx.fill(); ctx.stroke()
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = canUndo ? '#FFD700' : '#444'
-    ctx.fillText(`↩ 撤销 x${logic.undoLeft}`, undoX + undoW / 2, row2Y)
+    const divGrad = ctx.createLinearGradient(padX, divY, width - padX, divY)
+    divGrad.addColorStop(0,    'rgba(255,100,100,0.0)')
+    divGrad.addColorStop(0.08, '#FF6B6B')
+    divGrad.addColorStop(0.30, '#FFD700')
+    divGrad.addColorStop(0.55, '#4FC3F7')
+    divGrad.addColorStop(0.78, '#81C784')
+    divGrad.addColorStop(0.92, '#CE93D8')
+    divGrad.addColorStop(1,    'rgba(206,147,216,0.0)')
+    ctx.strokeStyle = divGrad
+    ctx.lineWidth   = 2.5
+    ctx.beginPath()
+    ctx.moveTo(padX, divY)
+    ctx.lineTo(width - padX, divY)
+    ctx.stroke()
     ctx.restore()
-    this._undoBtn = { x: undoX, y: undoY, w: undoW, h: btnH }
   }
 
   _drawDivider(ctx, width, logic) {
-    const y = this.slotTop - 8
+    const y = this.slotTop - 16
+    const slotText = `${logic.slot.length}/${logic.slotMax}`
+    const isWarn   = logic.slot.length >= logic.slotMax
+    const warnBlink = isWarn && this.frame % 30 < 15
+
     ctx.save()
-    ctx.strokeStyle = 'rgba(255,215,0,0.15)'
-    ctx.lineWidth = 1
+    ctx.font = '11px sans-serif'          // ← 必须先设 font，measureText 才准确
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    // 测量文字宽度，计算两侧线的端点
+    const textW   = ctx.measureText(slotText).width
+    const textPad = 8
+    const textCX  = width / 2
+    const lineL   = textCX - textW / 2 - textPad
+    const lineR   = textCX + textW / 2 + textPad
+
+    // 左侧虚线
+    ctx.strokeStyle = 'rgba(100,180,230,0.28)'
+    ctx.lineWidth   = 1
     ctx.setLineDash([4, 5])
-    ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(width - 10, y); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(lineL, y); ctx.stroke()
+    // 右侧虚线
+    ctx.beginPath(); ctx.moveTo(lineR, y); ctx.lineTo(width - 10, y); ctx.stroke()
     ctx.setLineDash([])
 
-    ctx.font = '10px sans-serif'
-    ctx.fillStyle = 'rgba(255,215,0,0.38)'
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-    ctx.fillText(`槽 ${logic.slot.length}/${logic.slotMax}`, 10, y)
+    // 数字（满槽时红色闪烁）
+    ctx.fillStyle = isWarn
+      ? (warnBlink ? 'rgba(220,60,60,0.90)' : 'rgba(220,60,60,0.50)')
+      : 'rgba(60,130,180,0.75)'
+    ctx.fillText(slotText, textCX, y)
 
-    // 右侧显示槽满警告
-    if (logic.slot.length >= logic.slotMax) {
-      const warn = this.frame % 30 < 15
-      ctx.textAlign = 'right'
-      ctx.fillStyle = warn ? 'rgba(255,80,80,0.8)' : 'rgba(255,80,80,0.4)'
-      ctx.fillText('槽位已满!', width - 10, y)
-    }
     ctx.restore()
   }
 
   // ========== 棋盘格纹理背景 ==========
   _drawGridTexture(ctx) {
-    const step = this.cellStep
-    const bL   = this.boardLeft
-    const bT   = this.boardTop
+    const cols = CONFIG.BOARD_COLS
+    const rows = CONFIG.BOARD_ROWS
+    const sz   = this.cellSize
+    const gap  = this.cellGap
+    const bx   = this.boardLeft - gap
+    const by   = this.boardTop  - gap
+    const bw   = cols * (sz + gap) + gap
+    const bh   = rows * (sz + gap) + gap
+    const r    = 14  // 圆角
 
     ctx.save()
-    // 棋盘区整体淡色背景块（增加区域感）
-    const totalW = CONFIG.BOARD_COLS * step - this.cellGap
-    const totalH = CONFIG.BOARD_ROWS * step - this.cellGap
-    ctx.fillStyle = 'rgba(255,255,255,0.025)'
-    roundRect(ctx, bL - 6, bT - 6, totalW + 12, totalH + 12, 12); ctx.fill()
 
-    // 画细格线（只绘竖线和横线，不铺满，保留空气感）
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-    ctx.lineWidth   = 0.5
+    // ── 棋盘底板（半透明深蓝，无全局阴影）──
+    ctx.fillStyle = 'rgba(175, 208, 241, 0.1)'
+    roundRect(ctx, bx, by, bw, bh, r); ctx.fill()
 
-    for (let c = 0; c <= CONFIG.BOARD_COLS; c++) {
-      const x = bL + c * step - this.cellGap / 2
-      ctx.beginPath(); ctx.moveTo(x, bT - 4); ctx.lineTo(x, bT + totalH + 4); ctx.stroke()
-    }
-    for (let r = 0; r <= CONFIG.BOARD_ROWS; r++) {
-      const y = bT + r * step - this.cellGap / 2
-      ctx.beginPath(); ctx.moveTo(bL - 4, y); ctx.lineTo(bL + totalW + 4, y); ctx.stroke()
-    }
+    // 内渐变（轻微明暗变化）
+    const panelG = ctx.createLinearGradient(bx, by, bx, by + bh)
+    panelG.addColorStop(0, 'rgba(255,255,255,0.06)')
+    panelG.addColorStop(1, 'rgba(0,0,0,0.06)')
+    ctx.fillStyle = panelG
+    roundRect(ctx, bx, by, bw, bh, r); ctx.fill()
+  
+    // 外边框（白色半透明细线）
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+    ctx.lineWidth   = 1.5
+    roundRect(ctx, bx, by, bw, bh, r); ctx.stroke()
 
     ctx.restore()
   }
 
-  // ========== 方案一（精简）：车块主体 ==========
+  // ========== 车块棋盘（亮色主题）==========
   _drawBoard(ctx, logic) {
+    // 先画棋盘背景面板
+    this._drawGridTexture(ctx)
     const sz = this.cellSize
     for (let r = 0; r < CONFIG.BOARD_ROWS; r++) {
       for (let c = 0; c < CONFIG.BOARD_COLS; c++) {
@@ -456,103 +562,137 @@ export default class GameScene {
         const depth   = logic.getStackDepth(r, c)
         const topCar  = logic.getTopCar(r, c)
         const blocked = depth > 0 && logic.isBlocked(r, c)
-        const canTap  = depth > 0 && !blocked   // 可点击
+        const canTap  = depth > 0 && !blocked
 
-        // 格子底板
-        ctx.save()
-        ctx.fillStyle = depth > 0
-          ? (blocked ? 'rgba(20,20,28,0.6)' : 'rgba(255,255,255,0.07)')
-          : 'rgba(255,255,255,0.03)'
-        roundRect(ctx, x, y, sz, sz, 7); ctx.fill()
-        ctx.strokeStyle = blocked ? 'rgba(60,60,70,0.3)' : 'rgba(255,255,255,0.1)'
-        ctx.lineWidth = 1; ctx.stroke()
-        ctx.restore()
-
-        if (!topCar) continue
-
-        // 堆叠层数偏移阴影
-        if (depth >= 2) {
-          const layers = Math.min(depth - 1, 2)
-          for (let l = layers - 1; l >= 0; l--) {
-            const off = (l + 1) * 3
-            ctx.save()
-            ctx.fillStyle = 'rgba(0,0,0,0.25)'
-            roundRect(ctx, x + off, y + off, sz, sz, 7); ctx.fill()
-            ctx.restore()
-          }
+        // 空格底板：浅蓝半透明，融入天蓝背景
+        if (!topCar) {
+          ctx.save()
+          // 底色：天蓝色，低透明度（与背景融合）
+          ctx.fillStyle = 'rgba(150,215,245,0.22)'
+          roundRect(ctx, x, y, sz, sz, 10); ctx.fill()
+          // 顶部浅白渐变（玻璃反光）
+          const emptyHg = ctx.createLinearGradient(x, y, x, y + sz * 0.45)
+          emptyHg.addColorStop(0,   'rgba(255,255,255,0.52)')
+          emptyHg.addColorStop(0.6, 'rgba(255,255,255,0.12)')
+          emptyHg.addColorStop(1,   'rgba(255,255,255,0.00)')
+          ctx.fillStyle = emptyHg
+          roundRect(ctx, x, y, sz, sz * 0.45, { tl:10, tr:10, bl:0, br:0 }); ctx.fill()
+          // 左侧亮边
+          const emptyL = ctx.createLinearGradient(x, y, x + sz*0.18, y)
+          emptyL.addColorStop(0, 'rgba(255,255,255,0.22)')
+          emptyL.addColorStop(1, 'rgba(255,255,255,0.00)')
+          ctx.fillStyle = emptyL
+          roundRect(ctx, x, y, sz*0.18, sz, { tl:10, tr:0, bl:10, br:0 }); ctx.fill()
+          // 右侧亮边
+          const emptyR = ctx.createLinearGradient(x + sz, y, x + sz - sz*0.14, y)
+          emptyR.addColorStop(0, 'rgba(255,255,255,0.14)')
+          emptyR.addColorStop(1, 'rgba(255,255,255,0.00)')
+          ctx.fillStyle = emptyR
+          roundRect(ctx, x + sz - sz*0.14, y, sz*0.14, sz, { tl:0, tr:10, bl:0, br:10 }); ctx.fill()
+          // 底部反光
+          const emptyB = ctx.createLinearGradient(x, y + sz, x, y + sz - sz*0.18)
+          emptyB.addColorStop(0, 'rgba(255,255,255,0.16)')
+          emptyB.addColorStop(1, 'rgba(255,255,255,0.00)')
+          ctx.fillStyle = emptyB
+          roundRect(ctx, x, y + sz - sz*0.18, sz, sz*0.18, { tl:0, tr:0, bl:10, br:10 }); ctx.fill()
+          // 外细边框：浅蓝白
+          ctx.strokeStyle = 'rgba(200,235,255,0.50)'
+          ctx.lineWidth   = 1.5
+          roundRect(ctx, x, y, sz, sz, 10); ctx.stroke()
+          ctx.restore()
+          continue
         }
+
+        // 有车格子：饱和底色 + 强顶部高光，纯渐变做果冻感，无 shadow
+        ctx.save()
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'
+        roundRect(ctx, x, y, sz, sz, 10); ctx.fill()
+        ctx.restore()
 
         const isSel = this.selectedCell &&
           this.selectedCell.r === r && this.selectedCell.c === c
 
         ctx.save()
         ctx.translate(x + sz / 2, y + sz / 2)
-        if (isSel) ctx.scale(1.07, 1.07)
+        if (isSel) ctx.scale(1.09, 1.09)
 
-        // 被遮挡：整体降低饱和度 + 透明度
-        if (blocked) {
-          ctx.globalAlpha = 0.42
-          ctx.filter = 'saturate(0.35) brightness(0.7)'
-        }
-
-        // 主色块
+        // 彩色底色（饱和，无 shadow 不渗色）
         ctx.fillStyle = topCar.color
-        roundRect(ctx, -sz/2, -sz/2, sz, sz, 8); ctx.fill()
+        roundRect(ctx, -sz/2, -sz/2, sz, sz, 12); ctx.fill()
 
-        // 顶部高光（仅上1/3）
-        const hg = ctx.createLinearGradient(0, -sz/2, 0, -sz/2 + sz * 0.36)
-        hg.addColorStop(0, 'rgba(255,255,255,0.30)')
-        hg.addColorStop(1, 'rgba(255,255,255,0)')
+        // 顶部超亮白色高光（果冻感核心：上45%大面积亮白渐变）
+        const hg = ctx.createLinearGradient(0, -sz/2, 0, -sz/2 + sz * 0.45)
+        hg.addColorStop(0,    'rgba(255,255,255,0.78)')
+        hg.addColorStop(0.45, 'rgba(255,255,255,0.22)')
+        hg.addColorStop(1,    'rgba(255,255,255,0.00)')
         ctx.fillStyle = hg
-        roundRect(ctx, -sz/2, -sz/2, sz, sz * 0.36, 8); ctx.fill()
+        roundRect(ctx, -sz/2, -sz/2, sz, sz * 0.45, { tl:12, tr:12, bl:0, br:0 }); ctx.fill()
 
-        // 被遮挡时覆盖灰色蒙版，进一步压暗
-        if (blocked) {
-          ctx.fillStyle = 'rgba(0,0,8,0.35)'
-          roundRect(ctx, -sz/2, -sz/2, sz, sz, 8); ctx.fill()
-        }
+        // 左侧亮边（侧光感）
+        const sideG = ctx.createLinearGradient(-sz/2, 0, -sz/2 + sz*0.18, 0)
+        sideG.addColorStop(0, 'rgba(255,255,255,0.28)')
+        sideG.addColorStop(1, 'rgba(255,255,255,0.00)')
+        ctx.fillStyle = sideG
+        roundRect(ctx, -sz/2, -sz/2, sz*0.18, sz, { tl:12, tr:0, bl:12, br:0 }); ctx.fill()
 
-        // emoji 图标
+        // 右侧亮边（对称侧光）
+        const sideGR = ctx.createLinearGradient(sz/2, 0, sz/2 - sz*0.14, 0)
+        sideGR.addColorStop(0, 'rgba(255,255,255,0.18)')
+        sideGR.addColorStop(1, 'rgba(255,255,255,0.00)')
+        ctx.fillStyle = sideGR
+        roundRect(ctx, sz/2 - sz*0.14, -sz/2, sz*0.14, sz, { tl:0, tr:12, bl:0, br:12 }); ctx.fill()
+
+        // 底部反光（模拟糖果底部折射，较弱）
+        const botG = ctx.createLinearGradient(0, sz/2, 0, sz/2 - sz*0.18)
+        botG.addColorStop(0, 'rgba(255,255,255,0.22)')
+        botG.addColorStop(1, 'rgba(255,255,255,0.00)')
+        ctx.fillStyle = botG
+        roundRect(ctx, -sz/2, sz/2 - sz*0.18, sz, sz*0.18, { tl:0, tr:0, bl:12, br:12 }); ctx.fill()
+
+        // 车型 emoji
         ctx.font = `${sz * 0.46}px sans-serif`
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText(topCar.icon, 0, 0)
 
-        // 堆叠数（右上角）
+        // 堆叠数（右上角白色）
         if (depth > 1) {
           ctx.font = `bold ${Math.max(9, sz * 0.21)}px sans-serif`
           ctx.textAlign = 'right'; ctx.textBaseline = 'top'
-          ctx.fillStyle = blocked ? 'rgba(200,200,200,0.6)' : 'rgba(255,255,255,0.9)'
+          ctx.fillStyle = 'rgba(255,255,255,0.95)'
           ctx.fillText(`×${depth}`, sz/2 - 2, -sz/2 + 2)
         }
 
-        // 遮挡锁（右下角）
+        // 遮挡：仅锁图标（右下角角标，半透明）
         if (blocked) {
-          ctx.font = `${sz * 0.24}px sans-serif`
+          const lockSz = sz * 0.20
+          ctx.font = `${lockSz}px sans-serif`
           ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'
+          ctx.globalAlpha = 0.55
           ctx.fillText('🔒', sz/2 - 2, sz/2 - 2)
+          ctx.globalAlpha = 1
         }
 
-        ctx.restore()   // ← filter/alpha reset 完毕，回到正常状态
+        ctx.restore()   // filter/alpha 复位
 
-        // 可点击车块：外发光边框（在 restore 之后画，不受 filter 影响）
+        // 可点击：浅白外框
         if (canTap && !isSel) {
           ctx.save()
-          ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+          ctx.strokeStyle = 'rgba(255,255,255,0.60)'
           ctx.lineWidth   = 1.5
-          ctx.shadowColor = 'rgba(255,255,255,0.28)'
-          ctx.shadowBlur  = 6
-          roundRect(ctx, x, y, sz, sz, 8); ctx.stroke()
+          ctx.shadowColor = 'rgba(255,255,255,0.30)'
+          ctx.shadowBlur  = 4
+          roundRect(ctx, x, y, sz, sz, 12); ctx.stroke()
           ctx.restore()
         }
 
-        // 选中高亮（在 restore 之后画）
+        // 选中高亮：亮白强描边
         if (isSel && !blocked) {
           ctx.save()
-          ctx.strokeStyle = 'rgba(255,255,255,0.95)'
-          ctx.lineWidth   = 2.5
-          ctx.shadowColor = 'rgba(255,255,255,0.6)'
-          ctx.shadowBlur  = 10
-          roundRect(ctx, x, y, sz, sz, 8); ctx.stroke()
+          ctx.strokeStyle = '#FFFFFF'
+          ctx.lineWidth   = 3
+          ctx.shadowColor = 'rgba(255,255,255,0.85)'
+          ctx.shadowBlur  = 12
+          roundRect(ctx, x, y, sz, sz, 12); ctx.stroke()
           ctx.restore()
         }
       }
@@ -561,12 +701,64 @@ export default class GameScene {
 
   _drawSlot(ctx, logic) {
     const sz      = this.cellSize
-    const slotMax = logic.slotMax   // 扩槽后可能是7
+    const slotMax = logic.slotMax
+    const W       = this.game.width
+
+    // ── 棋盘与槽位之间的分隔线 ──
+    const divY = this.slotTop - 14
+    ctx.save()
+    const divGrad = ctx.createLinearGradient(0, divY, W, divY)
+    divGrad.addColorStop(0,    'rgba(255,255,255,0.00)')
+    divGrad.addColorStop(0.10, 'rgba(255,255,255,0.55)')
+    divGrad.addColorStop(0.50, 'rgba(160,220,255,0.80)')
+    divGrad.addColorStop(0.90, 'rgba(255,255,255,0.55)')
+    divGrad.addColorStop(1,    'rgba(255,255,255,0.00)')
+    ctx.strokeStyle = divGrad
+    ctx.lineWidth   = 1.5
+    ctx.beginPath()
+    ctx.moveTo(12, divY)
+    ctx.lineTo(W - 12, divY)
+    ctx.stroke()
+    ctx.restore()
+
+    // 槽位标签（居中，两侧虚线）
+    {
+      const labelY    = this.slotTop - 11
+      const slotFull  = logic.slot.length >= logic.slotMax
+      const warnBlink = slotFull && this.frame % 30 < 15
+      const slotText  = `${logic.slot.length}/${logic.slotMax}`
+
+      ctx.save()
+      ctx.font = 'bold 11px sans-serif'
+      ctx.textAlign    = 'center'
+      ctx.textBaseline = 'middle'
+
+      const textW   = ctx.measureText(slotText).width
+      const textPad = 8
+      const textCX  = W / 2
+      const lineL   = textCX - textW / 2 - textPad
+      const lineR   = textCX + textW / 2 + textPad
+
+      // 两侧虚线
+      ctx.strokeStyle = 'rgba(100,180,230,0.35)'
+      ctx.lineWidth   = 1
+      ctx.setLineDash([4, 5])
+      ctx.beginPath(); ctx.moveTo(12, labelY); ctx.lineTo(lineL, labelY); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(lineR, labelY); ctx.lineTo(W - 12, labelY); ctx.stroke()
+      ctx.setLineDash([])
+
+      // 居中数字
+      ctx.fillStyle = slotFull
+        ? (warnBlink ? '#FF6060' : 'rgba(255,100,100,0.75)')
+        : '#4FD4FF'
+      ctx.fillText(slotText, textCX, labelY)
+      ctx.restore()
+    }
+
     for (let i = 0; i < slotMax; i++) {
       const { x, y } = this.slotXY(i)
       const car      = logic.slot[i]
       const isFlash  = (this._insertFlash > 0 && i === this._insertIdx)
-      // 扩槽第7格弹入动画
       const isNewSlot = (slotMax === CONFIG.SLOT_MAX_EXPANDED && i === CONFIG.SLOT_MAX_EXPANDED - 1)
       const expandScale = isNewSlot && this._expandAnim > 0
         ? 0.6 + 0.4 * (1 - this._expandAnim / 18) : 1
@@ -578,34 +770,41 @@ export default class GameScene {
         ctx.translate(-(x + sz / 2), -(y + sz / 2))
       }
 
-      // 槽位底框
-      ctx.strokeStyle = car ? 'rgba(255,215,0,0.4)' : (isNewSlot ? 'rgba(79,195,247,0.5)' : 'rgba(255,255,255,0.12)')
-      ctx.lineWidth   = isNewSlot ? 2 : 1.5
-      ctx.setLineDash(car ? [] : [3, 3])
-      ctx.fillStyle   = car ? 'rgba(255,215,0,0.04)' : (isNewSlot ? 'rgba(79,195,247,0.06)' : 'rgba(255,255,255,0.025)')
-      roundRect(ctx, x, y, sz, sz, 7); ctx.fill(); ctx.stroke()
-      ctx.setLineDash([])
-
       if (car) {
+        // 有车：彩色卡片（与棋盘相同风格）
         if (isFlash) ctx.globalAlpha = 0.85 + 0.15 * this._insertFlash / 14
         ctx.fillStyle = car.color
-        roundRect(ctx, x, y, sz, sz, 7); ctx.fill()
-        const hg = ctx.createLinearGradient(x, y, x, y + sz * 0.36)
-        hg.addColorStop(0, 'rgba(255,255,255,0.28)')
+        roundRect(ctx, x, y, sz, sz, 8); ctx.fill()
+        // 顶部高光
+        const hg = ctx.createLinearGradient(x, y, x, y + sz * 0.38)
+        hg.addColorStop(0, 'rgba(255,255,255,0.40)')
         hg.addColorStop(1, 'rgba(255,255,255,0)')
         ctx.fillStyle = hg
-        roundRect(ctx, x, y, sz, sz * 0.36, 7); ctx.fill()
+        roundRect(ctx, x, y, sz, sz * 0.38, 8); ctx.fill()
+        // 插入闪烁高亮边框
         if (isFlash) {
-          ctx.strokeStyle = `rgba(255,255,255,${0.85 * this._insertFlash / 14})`
-          ctx.lineWidth   = 2
-          roundRect(ctx, x, y, sz, sz, 7); ctx.stroke()
+          ctx.strokeStyle = `rgba(255,255,255,${0.9 * this._insertFlash / 14})`
+          ctx.lineWidth   = 2.5
+          roundRect(ctx, x, y, sz, sz, 8); ctx.stroke()
         }
         ctx.font = `${sz * 0.44}px sans-serif`
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText(car.icon, x + sz / 2, y + sz / 2)
       } else {
-        ctx.font = `${Math.max(9, sz * 0.21)}px sans-serif`
-        ctx.fillStyle = isNewSlot ? 'rgba(79,195,247,0.4)' : 'rgba(255,255,255,0.1)'
+        // 空槽：白色半透明底板 + 白色虚线边框（对标设计图）
+        ctx.fillStyle   = isNewSlot
+          ? 'rgba(79,195,247,0.10)'
+          : 'rgba(255,255,255,0.18)'
+        ctx.strokeStyle = isNewSlot
+          ? 'rgba(79,195,247,0.65)'
+          : 'rgba(255,255,255,0.55)'
+        ctx.lineWidth   = isNewSlot ? 2 : 1.5
+        ctx.setLineDash([3, 3])
+        roundRect(ctx, x, y, sz, sz, 8); ctx.fill(); ctx.stroke()
+        ctx.setLineDash([])
+        // 槽位序号
+        ctx.font = `${Math.max(9, sz * 0.22)}px sans-serif`
+        ctx.fillStyle   = isNewSlot ? 'rgba(79,195,247,0.7)' : 'rgba(255,255,255,0.38)'
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText(isNewSlot ? '＋' : `${i + 1}`, x + sz / 2, y + sz / 2)
       }
@@ -613,101 +812,148 @@ export default class GameScene {
     }
   }
 
-  // ========== 道具按钮行 ==========
+  // ========== 道具按钮行（对标截图：卡片式，左侧图标圆，右侧文字）==========
   _drawPropBtns(ctx, width, logic) {
     const y    = this.propBtnTop
     const h    = this.propBtnH
-    const btnW = Math.floor((width - 48) / 2)
-    const gap  = 12
-    const startX = Math.floor((width - (btnW * 2 + gap)) / 2)
+    const gap  = 10
+    const padX = 16
+    const btnW = Math.floor((width - padX * 2 - gap) / 2)
+    const startX = padX
 
     this._propBtns = []
 
     const defs = [
       {
-        type:  'expand',
-        icon:  '➕',
-        label: '扩槽',
-        sub:   logic.slotMax > CONFIG.SLOT_MAX ? '已激活' : `×${logic.expandLeft}`,
-        left:  logic.expandLeft,
-        maxed: logic.slotMax >= CONFIG.SLOT_MAX_EXPANDED,
-        color: '#4FC3F7',
+        type:   'expand',
+        icon:   '+',
+        label:  '扩槽',
+        sub:    logic.slotMax > CONFIG.SLOT_MAX ? '已激活' : `×${logic.expandLeft}`,
+        left:   logic.expandLeft,
+        maxed:  logic.slotMax >= CONFIG.SLOT_MAX_EXPANDED,
+        // 蓝紫渐变
+        c0: '#5EB8FF', c1: '#2D7FE8',
+        ic0: '#82CFFF', ic1: '#4498FF',   // 图标圆渐变
+        flash: '#A0CCFF',
       },
       {
-        type:  'shuffle',
-        icon:  '🔀',
-        label: '洗牌',
-        sub:   `×${logic.shuffleLeft}`,
-        left:  logic.shuffleLeft,
-        maxed: false,
-        color: '#81C784',
+        type:   'shuffle',
+        icon:   '⇄',
+        label:  '洗牌',
+        sub:    `×${logic.shuffleLeft}`,
+        left:   logic.shuffleLeft,
+        maxed:  false,
+        // 青绿渐变
+        c0: '#2EE0B8', c1: '#0DB896',
+        ic0: '#6EFFD8', ic1: '#18C8A0',
+        flash: '#88FFD8',
       },
     ]
 
     defs.forEach((def, i) => {
-      const x     = startX + i * (btnW + gap)
-      const empty = def.left <= 0
-      const flash = this._propFlash && this._propFlash.type === def.type && this._propFlash.frame > 0
-      const activated = def.type === 'expand' && def.maxed
+      const x       = startX + i * (btnW + gap)
+      const midY    = y + h / 2
+      const empty   = def.left <= 0 || (def.type === 'expand' && def.maxed)
+      const isFlash = this._propFlash && this._propFlash.type === def.type && this._propFlash.frame > 0
 
       this._propBtns.push({ type: def.type, x, y, w: btnW, h })
 
-      // 十六进制色转 rgb 字符串
-      const rgb = hexToRgb(def.color)
-
       ctx.save()
-      // 背景
-      ctx.fillStyle = flash
-        ? `rgba(${rgb},0.45)`
-        : (empty ? 'rgba(35,35,45,0.7)' : `rgba(${rgb},0.12)`)
-      ctx.strokeStyle = flash
-        ? `rgba(${rgb},1)`
-        : (empty ? 'rgba(80,80,95,0.4)' : (activated ? `rgba(${rgb},0.9)` : `rgba(${rgb},0.5)`))
-      ctx.lineWidth = flash || activated ? 2 : 1.5
-      roundRect(ctx, x, y, btnW, h, 12); ctx.fill(); ctx.stroke()
 
-      // 激活态顶部亮线
-      if (activated && !empty) {
-        const ag = ctx.createLinearGradient(x, y, x + btnW, y)
-        ag.addColorStop(0,   `rgba(${rgb},0)`)
-        ag.addColorStop(0.5, `rgba(${rgb},0.7)`)
-        ag.addColorStop(1,   `rgba(${rgb},0)`)
-        ctx.fillStyle = ag
-        ctx.fillRect(x + 12, y, btnW - 24, 2)
-      }
-      ctx.restore()
-
-      // 图标（独立 save 避免被裁剪）
-      ctx.save()
-      ctx.globalAlpha = empty ? 0.3 : 1
-      ctx.font = '20px sans-serif'
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.fillText(def.icon, x + 28, y + h / 2)
-      ctx.restore()
-
-      // 文字
-      ctx.save()
-      ctx.globalAlpha = empty ? 0.35 : 1
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-      ctx.font = `bold 14px sans-serif`
-      ctx.fillStyle = empty ? '#666' : (flash ? '#fff' : def.color)
-      ctx.fillText(def.label, x + 46, y + h / 2 - 8)
-      ctx.font = '11px sans-serif'
-      ctx.fillStyle = empty ? '#555' : 'rgba(255,255,255,0.55)'
-      ctx.fillText(empty ? '已用完' : def.sub, x + 46, y + h / 2 + 9)
-      ctx.restore()
-
-      // 用完时右侧「+获取」角标
+      // ── 卡片背景（大圆角，渐变）──
+      const grad = ctx.createLinearGradient(x, y, x + btnW, y + h)
       if (empty) {
-        const tagX = x + btnW - 36, tagY = y + h / 2 - 10, tagW = 32, tagH = 20
+        grad.addColorStop(0, 'rgba(180,195,215,0.52)')
+        grad.addColorStop(1, 'rgba(150,168,190,0.52)')
+      } else if (isFlash) {
+        grad.addColorStop(0, def.flash)
+        grad.addColorStop(1, def.c1)
+      } else {
+        grad.addColorStop(0, def.c0)
+        grad.addColorStop(1, def.c1)
+      }
+      ctx.fillStyle = grad
+      if (!empty) {
+        ctx.shadowColor = `${def.c1}88`
+        ctx.shadowBlur  = 12
+        ctx.shadowOffsetY = 3
+      }
+      roundRect(ctx, x, y, btnW, h, 18); ctx.fill()
+      ctx.shadowBlur = 0; ctx.shadowOffsetY = 0
+
+      // 顶部高光条
+      if (!empty) {
+        const hl = ctx.createLinearGradient(x, y, x, y + h * 0.48)
+        hl.addColorStop(0, 'rgba(255,255,255,0.40)')
+        hl.addColorStop(1, 'rgba(255,255,255,0.00)')
+        ctx.fillStyle = hl
+        roundRect(ctx, x, y, btnW, h * 0.48, { tl:18, tr:18, bl:0, br:0 }); ctx.fill()
+      }
+
+      // ── 左侧图标圆形背景 ──
+      const circR  = h * 0.36
+      const circX  = x + 18 + circR
+      const circY  = midY
+      // if (!empty) {
+      //   const circG = ctx.createLinearGradient(circX - circR, circY - circR, circX + circR, circY + circR)
+      //   circG.addColorStop(0, def.ic0)
+      //   circG.addColorStop(1, def.ic1)
+      //   ctx.fillStyle = circG
+      //   ctx.shadowColor = 'rgba(0,0,0,0.20)'
+      //   ctx.shadowBlur  = 6
+      //   ctx.beginPath(); ctx.arc(circX, circY, circR, 0, Math.PI * 2); ctx.fill()
+      //   ctx.shadowBlur  = 0
+      //   // 圆内高光
+      //   const circHL = ctx.createRadialGradient(circX - circR * 0.25, circY - circR * 0.25, 0, circX, circY, circR)
+      //   circHL.addColorStop(0, 'rgba(255,255,255,0.45)')
+      //   circHL.addColorStop(0.5, 'rgba(255,255,255,0.10)')
+      //   circHL.addColorStop(1, 'rgba(255,255,255,0.00)')
+      //   ctx.fillStyle = circHL
+      //   ctx.beginPath(); ctx.arc(circX, circY, circR, 0, Math.PI * 2); ctx.fill()
+      // } else {
+      //   ctx.fillStyle = 'rgba(150,170,190,0.40)'
+      //   ctx.beginPath(); ctx.arc(circX, circY, circR, 0, Math.PI * 2); ctx.fill()
+      // }
+
+      // 图标文字
+      ctx.font = `bold ${Math.round(circR * 1.15)}px sans-serif`
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillStyle = empty ? 'rgba(120,140,160,0.70)' : '#FFFFFF'
+      ctx.fillText(def.icon, circX, circY + 1)
+
+      ctx.restore()
+
+      // ── 右侧文字区 ──
+      ctx.save()
+      ctx.globalAlpha = empty ? 0.50 : 1
+      const textX = x + 18 + circR * 2 + 10
+
+      // 主标签（大字）
+      ctx.font = 'bold 17px sans-serif'
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillText(def.label, textX, midY - 9)
+
+      // 数量/状态（小字）
+      ctx.font = '12px sans-serif'
+      ctx.fillStyle = empty ? 'rgba(120,140,160,0.80)' : 'rgba(255,255,255,0.85)'
+      ctx.fillText(empty ? '已用完' : def.sub, textX, midY + 10)
+
+      ctx.restore()
+
+      // ── 用完时：+获取 角标（右侧）──
+      if (empty) {
+        const tagW = 44, tagH = 22
+        const tagX = x + btnW - tagW - 10
+        const tagY = midY - tagH / 2
         ctx.save()
-        ctx.fillStyle   = 'rgba(255,180,0,0.18)'
-        ctx.strokeStyle = 'rgba(255,180,0,0.5)'
-        ctx.lineWidth = 1
-        roundRect(ctx, tagX, tagY, tagW, tagH, 6); ctx.fill(); ctx.stroke()
-        ctx.font = '10px sans-serif'
-        ctx.fillStyle   = '#FFD700'
-        ctx.textAlign   = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillStyle   = 'rgba(255,160,0,0.16)'
+        ctx.strokeStyle = 'rgba(230,140,0,0.70)'
+        ctx.lineWidth   = 1.2
+        roundRect(ctx, tagX, tagY, tagW, tagH, 10); ctx.fill(); ctx.stroke()
+        ctx.font = 'bold 10px sans-serif'
+        ctx.fillStyle = '#D07000'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText('+获取', tagX + tagW / 2, tagY + tagH / 2)
         ctx.restore()
       }
@@ -771,35 +1017,43 @@ export default class GameScene {
 
   _drawWin(ctx, width, height) {
     ctx.save()
-    ctx.fillStyle = 'rgba(0,0,0,0.65)'
+    // 亮色半透明白色遮罩
+    ctx.fillStyle = 'rgba(220,245,255,0.78)'
     ctx.fillRect(0, 0, width, height)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    // 大 emoji
     ctx.font = 'bold 56px sans-serif'
-    ctx.fillStyle = '#FFD700'
-    ctx.fillText('🎉', width/2, height/2 - 60)
-    ctx.font = 'bold 32px sans-serif'
-    ctx.fillStyle = '#FFD700'
-    ctx.fillText('本关通过！', width/2, height/2 - 5)
+    ctx.fillText('🎉', width/2, height/2 - 62)
+    // 标题
+    ctx.font = 'bold 34px sans-serif'
+    ctx.fillStyle = '#1a6ea8'
+    ctx.shadowColor = 'rgba(30,120,200,0.30)'
+    ctx.shadowBlur  = 12
+    ctx.fillText('本关通过！', width/2, height/2 - 4)
+    ctx.shadowBlur  = 0
+    // 副标
     ctx.font = '18px sans-serif'
-    ctx.fillStyle = '#a0d8ef'
-    ctx.fillText('进入下一关...', width/2, height/2 + 36)
+    ctx.fillStyle = '#3a9ad0'
+    ctx.fillText('进入下一关…', width/2, height/2 + 38)
     ctx.restore()
   }
 
   _drawGameOver(ctx, width, height) {
     ctx.save()
-    ctx.fillStyle = 'rgba(0,0,0,0.72)'
+    ctx.fillStyle = 'rgba(255,230,220,0.80)'
     ctx.fillRect(0, 0, width, height)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.font = 'bold 52px sans-serif'
-    ctx.fillStyle = '#FF4444'
-    ctx.fillText('💔', width/2, height/2 - 60)
-    ctx.font = 'bold 28px sans-serif'
-    ctx.fillStyle = '#FF6B6B'
-    ctx.fillText('本关失败…', width/2, height/2 - 5)
-    ctx.font = '16px sans-serif'
-    ctx.fillStyle = '#a0d8ef'
-    ctx.fillText('别灰心，重新挑战！', width/2, height/2 + 36)
+    ctx.fillText('💔', width/2, height/2 - 62)
+    ctx.font = 'bold 30px sans-serif'
+    ctx.fillStyle = '#C03030'
+    ctx.shadowColor = 'rgba(200,50,50,0.28)'
+    ctx.shadowBlur  = 10
+    ctx.fillText('本关失败…', width/2, height/2 - 4)
+    ctx.shadowBlur  = 0
+    ctx.font = '17px sans-serif'
+    ctx.fillStyle = '#A04040'
+    ctx.fillText('别灰心，重新挑战！', width/2, height/2 + 38)
     ctx.restore()
   }
 
@@ -809,7 +1063,13 @@ export default class GameScene {
   }
 
   onTouchEnd(x, y) {
-    // ── ① 道具获取弹层优先消费 ──
+    // ── ① 成就弹窗优先消费 ──
+    if (this._achPopup && this._achPopup.visible) {
+      this._achPopup.onTouchEnd(x, y)
+      return
+    }
+
+    // ── ② 道具获取弹层优先消费 ──
     if (this._adModal) {
       const { btnWatch, btnShare, btnClose, type } = this._adModal
       if (this._hitTest(x, y, btnClose)) { this._adModal = null; return }
@@ -829,6 +1089,7 @@ export default class GameScene {
         this._insertIdx   = -1
         this.lastCarsWon  = this.logic.carsWon
         this.lastSlotLen  = this.logic.slot.length
+        this._sessionUndos++   // 成就计数
         this.floatTexts.push(new FloatText('已撤销', this.game.width / 2, this.slotTop - 20, '#FFD700'))
       }
       return
@@ -892,6 +1153,7 @@ export default class GameScene {
       if (res === 'ok') {
         this._propFlash   = { type, frame: 14 }
         this._shuffleAnim = 22
+        this._sessionShuffles++   // 成就计数
         this.floatTexts.push(new FloatText('🔀 棋盘已洗牌！', W / 2, floatY, '#81C784'))
         AudioManager.playUndo()
       } else if (res === 'board_empty') {
@@ -924,7 +1186,10 @@ export default class GameScene {
       title:    '我在「赢了个赢」里三消赢豪车！来挑战我！',
       imageUrl: SHARE_CONFIG.imageUrl,
       query: `from=share&prop=${propType}`,
-      success: () => this._grantProp(propType, '分享'),
+      success: () => {
+        this._sessionShares++   // 成就计数
+        this._grantProp(propType, '分享')
+      },
       fail: () => this.floatTexts.push(new FloatText('分享取消', this.game.width / 2, this.game.height / 2, '#888')),
     })
   }
@@ -945,12 +1210,12 @@ export default class GameScene {
     ))
   }
 
-  // ========== 底部信息面板 ==========
+  // ========== 底部信息面板（亮色主题）==========
   _drawBottomPanel(ctx, width, height, logic) {
     const panelTop = this.bottomPanelTop
     if (panelTop >= height - 30) return
 
-    const safeBottom = 34   // iPhone Home Indicator 安全区
+    const safeBottom = 34
     const panelH = height - panelTop - safeBottom
     if (panelH < 50) return
 
@@ -964,9 +1229,9 @@ export default class GameScene {
       ctx.save()
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
       ctx.font = `bold ${comboSize}px sans-serif`
-      ctx.fillStyle = '#FF6B35'
-      ctx.shadowColor = 'rgba(255,107,53,0.7)'
-      ctx.shadowBlur = 14
+      ctx.fillStyle = '#E05010'
+      ctx.shadowColor = 'rgba(255,120,30,0.55)'
+      ctx.shadowBlur = 10
       const pulse = 1 + Math.sin(this.frame * 0.15) * 0.05
       ctx.translate(cx, comboY)
       ctx.scale(pulse, pulse)
@@ -974,24 +1239,24 @@ export default class GameScene {
       ctx.restore()
     }
 
-    // 提示文字（轮播）
+    // 提示文字
     const tips = [
-      '点击未被遮挡的车块放入槽中',
+      '点击未被加锁的车块放入槽中',
       '集齐3辆同款即可赢得！',
       '槽位满且无法消除则失败',
-      '顶层有车时下方格被遮挡',
+      '顶层有车时下方格被加锁',
     ]
     const tipIdx = Math.floor(this.frame / 180) % tips.length
     const tipY   = panelTop + (logic.combo > 1 ? 58 : 22)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.font = '11px sans-serif'
-    ctx.fillStyle = 'rgba(180,200,240,0.32)'
+    ctx.fillStyle = 'rgba(20,80,140,0.38)'
     ctx.fillText(tips[tipIdx], cx, tipY)
 
-    // ── 已收集进度展示 ──
+    // 已收集进度展示
     this._drawCollectionProgress(ctx, width, panelTop + (logic.combo > 1 ? 76 : 40), logic)
 
-    // 装饰小车图标彩条（留出底部安全区）
+    // 底部装饰小车
     if (panelH > 100) {
       const iconY   = height - safeBottom - 18
       const icons   = CONFIG.CAR_ICONS.slice(0, 7)
@@ -1001,7 +1266,7 @@ export default class GameScene {
       icons.forEach((icon, i) => {
         const ix     = iconGap * (i + 1)
         const bounce = Math.sin(this.frame * 0.06 + i * 0.9) * 3
-        ctx.globalAlpha = 0.14 + (i % 3) * 0.05
+        ctx.globalAlpha = 0.10 + (i % 3) * 0.04
         ctx.textAlign = 'center'
         ctx.fillText(icon, ix, iconY + bounce)
       })
@@ -1010,15 +1275,13 @@ export default class GameScene {
     ctx.restore()
   }
 
-  // ========== 已收集进度小条 ==========
+  // ========== 已收集进度小条（亮色主题）==========
   _drawCollectionProgress(ctx, width, startY, logic) {
-    // 统计槽位中各车型数量 + 已消除数量（已赢车 / 3 = 每种消除了几组）
     const slotCount = {}
     for (const car of logic.slot) {
       slotCount[car.type] = (slotCount[car.type] || 0) + 1
     }
 
-    // 棋盘上还有哪些类型
     const boardTypes = new Set()
     for (const row of logic.board) {
       for (const stack of row) {
@@ -1041,27 +1304,33 @@ export default class GameScene {
       const x = startX + i * itemW + (itemW - sz) / 2
       const y = startY
 
-      // 小圆角底板
+      // 小圆角底板（亮色：浅白或淡彩）
       ctx.fillStyle = inSlot > 0
-        ? `rgba(${hexToRgb(CONFIG.COLORS[type])},0.18)`
-        : 'rgba(255,255,255,0.04)'
+        ? `rgba(${hexToRgb(CONFIG.COLORS[type])},0.22)`
+        : 'rgba(255,255,255,0.40)'
       roundRect(ctx, x, y, sz, sz, 6); ctx.fill()
 
-      // 车型图标
+      // 有车时轻描边
+      if (inSlot > 0) {
+        ctx.strokeStyle = `rgba(${hexToRgb(CONFIG.COLORS[type])},0.55)`
+        ctx.lineWidth   = 1
+        roundRect(ctx, x, y, sz, sz, 6); ctx.stroke()
+      }
+
       ctx.font = `${sz * 0.48}px sans-serif`
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.globalAlpha = inSlot > 0 ? 1 : 0.35
+      ctx.globalAlpha = inSlot > 0 ? 1 : 0.38
       ctx.fillText(CONFIG.CAR_ICONS[type], x + sz / 2, y + sz / 2)
       ctx.globalAlpha = 1
 
-      // 底部数量点（最多3个点，代表收集进度）
+      // 底部进度点
       const dotY = y + sz + 5
       for (let d = 0; d < CONFIG.MATCH_COUNT; d++) {
         const filled = d < inSlot
         const dotX   = x + sz / 2 + (d - 1) * 8
         ctx.beginPath()
         ctx.arc(dotX, dotY, 3, 0, Math.PI * 2)
-        ctx.fillStyle = filled ? CONFIG.COLORS[type] : 'rgba(255,255,255,0.12)'
+        ctx.fillStyle = filled ? CONFIG.COLORS[type] : 'rgba(100,160,200,0.20)'
         ctx.fill()
       }
     })

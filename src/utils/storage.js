@@ -73,6 +73,25 @@ function getRecoverSecondsLeft() {
   return Math.ceil(remain / 1000)
 }
 
+// ==================== 关卡进度 ====================
+const LEVEL_PROGRESS_KEY = 'ywgy_level_progress'
+
+// 读取已解锁的最高关卡索引（0-based）；首次返回 0
+function getLevelProgress() {
+  try {
+    const raw = wx.getStorageSync(LEVEL_PROGRESS_KEY)
+    if (typeof raw === 'number' && raw >= 0) return raw
+  } catch (e) {}
+  return 0
+}
+
+// 保存当前进入的关卡索引（直接覆盖，退出是哪关下次就从哪关开始）
+function saveLevelProgress(levelIdx) {
+  try {
+    wx.setStorageSync(LEVEL_PROGRESS_KEY, levelIdx)
+  } catch (e) {}
+}
+
 // ==================== 排行榜 ====================
 const RANK_KEY = 'levelsPassed'
 
@@ -189,6 +208,161 @@ function addExtraProp(type, n = 1) {
   return data[type]
 }
 
+// ==================== 成就系统 ====================
+const ACHIEVEMENT_STATS_KEY   = 'ywgy_ach_stats'    // 累计统计数据
+const ACHIEVEMENT_UNLOCK_KEY  = 'ywgy_ach_unlocked'  // 已解锁成就 ID 集合
+
+// 默认统计结构
+function _defaultStats() {
+  return {
+    levelsPassed:  0,   // 累计通关关数
+    totalCarsWon:  0,   // 累计赢车数
+    maxCombo:      0,   // 历史最高连消
+    threeStarCount: 0,  // 累计 3 星次数
+    totalUndos:    0,   // 累计撤销次数
+    totalShuffles: 0,   // 累计洗牌次数
+    totalShares:   0,   // 累计分享次数
+  }
+}
+
+// 读取累计统计
+function getAchievementStats() {
+  try {
+    const raw = wx.getStorageSync(ACHIEVEMENT_STATS_KEY)
+    if (raw && typeof raw === 'object') {
+      return { ..._defaultStats(), ...raw }
+    }
+  } catch (e) {}
+  return _defaultStats()
+}
+
+// 保存累计统计
+function saveAchievementStats(stats) {
+  try { wx.setStorageSync(ACHIEVEMENT_STATS_KEY, stats) } catch (e) {}
+}
+
+// 读取已解锁成就集合（返回 Set<string>）
+function getUnlockedAchievements() {
+  try {
+    const raw = wx.getStorageSync(ACHIEVEMENT_UNLOCK_KEY)
+    if (Array.isArray(raw)) return new Set(raw)
+  } catch (e) {}
+  return new Set()
+}
+
+// 解锁一个成就（持久化）
+function unlockAchievement(id) {
+  const set = getUnlockedAchievements()
+  if (set.has(id)) return false   // 已解锁，不重复
+  set.add(id)
+  try { wx.setStorageSync(ACHIEVEMENT_UNLOCK_KEY, [...set]) } catch (e) {}
+  return true   // 返回 true 表示是新解锁
+}
+
+// 批量检测并解锁成就；返回本次新解锁的成就数组（可能为空）
+// achievements = CONFIG.ACHIEVEMENTS，stats = 当前统计对象
+function checkAndUnlockAchievements(achievements, stats) {
+  const unlocked = getUnlockedAchievements()
+  const newlyUnlocked = []
+  for (const ach of achievements) {
+    if (!unlocked.has(ach.id) && ach.check(stats)) {
+      const isNew = unlockAchievement(ach.id)
+      if (isNew) newlyUnlocked.push(ach)
+    }
+  }
+  return newlyUnlocked
+}
+
+// ==================== 每日挑战 ====================
+const DAILY_KEY = 'ywgy_daily'
+
+// 今天日期字符串 YYYYMMDD（本地时间）
+function _todayStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}${m}${day}`
+}
+
+// 昨天日期字符串
+function _yesterdayStr() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}${m}${day}`
+}
+
+// 读取每日挑战状态
+// 返回 { date, played, won, streak, dailyWins }
+function getDailyState() {
+  try {
+    const raw = wx.getStorageSync(DAILY_KEY)
+    if (raw && typeof raw === 'object') {
+      // 若存储日期不是今天，保留 streak/dailyWins，重置 played/won
+      if (raw.date !== _todayStr()) {
+        // 若上次玩的是昨天且赢了，streak 连续保留（completeDailyChallenge 才递增，这里不动）
+        return {
+          date:      _todayStr(),
+          played:    false,
+          won:       false,
+          streak:    raw.streak    || 0,
+          dailyWins: raw.dailyWins || 0,
+          lastWonDate: raw.won ? raw.date : (raw.lastWonDate || ''),
+        }
+      }
+      return { streak: 0, dailyWins: 0, lastWonDate: '', ...raw }
+    }
+  } catch (e) {}
+  return { date: _todayStr(), played: false, won: false, streak: 0, dailyWins: 0, lastWonDate: '' }
+}
+
+// 保存每日挑战状态
+function saveDailyState(state) {
+  try { wx.setStorageSync(DAILY_KEY, state) } catch (e) {}
+}
+
+// 每日挑战结束时调用（won: 是否通关）
+// 返回更新后的 state
+function completeDailyChallenge(won) {
+  const state = getDailyState()
+  if (state.played) return state   // 今天已完成，不重复计算
+
+  const today = _todayStr()
+  const yesterday = _yesterdayStr()
+
+  let newStreak    = state.streak    || 0
+  let newDailyWins = state.dailyWins || 0
+  let newLastWonDate = state.lastWonDate || ''
+
+  if (won) {
+    // 连续天数：昨天也赢了 → streak+1；否则从 1 开始
+    if (newLastWonDate === yesterday) {
+      newStreak = newStreak + 1
+    } else {
+      newStreak = 1
+    }
+    newDailyWins    = newDailyWins + 1
+    newLastWonDate  = today
+  } else {
+    // 失败：连击中断（streak 清 0）
+    newStreak = 0
+  }
+
+  const newState = {
+    date:        today,
+    played:      true,
+    won,
+    streak:      newStreak,
+    dailyWins:   newDailyWins,
+    lastWonDate: newLastWonDate,
+  }
+  saveDailyState(newState)
+  return newState
+}
+
 export {
   // 分享配置（供其他场景复用）
   SHARE_CONFIG,
@@ -197,6 +371,9 @@ export {
   spendLife,
   addLife,
   getRecoverSecondsLeft,
+  // 关卡进度
+  getLevelProgress,
+  saveLevelProgress,
   // 排行榜
   saveProgress,
   fetchFriendRank,
@@ -207,4 +384,14 @@ export {
   getExtraProps,
   spendExtraProp,
   addExtraProp,
+  // 成就
+  getAchievementStats,
+  saveAchievementStats,
+  getUnlockedAchievements,
+  unlockAchievement,
+  checkAndUnlockAchievements,
+  // 每日挑战
+  getDailyState,
+  saveDailyState,
+  completeDailyChallenge,
 }

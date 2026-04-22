@@ -5,7 +5,9 @@ import ResultScene      from './src/scenes/ResultScene.js'
 import LeaderboardScene from './src/scenes/LeaderboardScene.js'
 import SettingsScene    from './src/scenes/SettingsScene.js'
 import AllClearScene    from './src/scenes/AllClearScene.js'
-import { handleShareEntry } from './src/utils/storage.js'
+import AchievementScene from './src/scenes/AchievementScene.js'
+import DailyScene       from './src/scenes/DailyScene.js'
+import { handleShareEntry, saveLevelProgress } from './src/utils/storage.js'
 import AudioManager     from './src/utils/audio.js'
 
 const canvas = wx.createCanvas()
@@ -70,6 +72,7 @@ const Game = {
   },
 
   showGame(levelIdx = 0) {
+    saveLevelProgress(levelIdx)   // 记录本次进入的关卡，退出即恢复
     this.currentScene = new GameScene(this, levelIdx)
     this.currentScene.init()
   },
@@ -93,6 +96,31 @@ const Game = {
 
   showAllClear() {
     this.currentScene = new AllClearScene(this)
+    this.currentScene.init()
+  },
+
+  showAchievements() {
+    this.currentScene = new AchievementScene(this)
+    this.currentScene.init()
+  },
+
+  showDaily() {
+    this.currentScene = new DailyScene(this)
+    this.currentScene.init()
+  },
+
+  // 从 DailyScene 进入每日关卡游戏（dailyScene 引用用于结果回调）
+  showDailyGame(levelCfg, dailyScene) {
+    const scene = new GameScene(this, 0, levelCfg, (isWin, score, carsWon, stars) => {
+      // 先让 DailyScene 处理统计/成就
+      dailyScene.onDailyResult(isWin)
+      // 再展示结算卡片，结算"下一步"返回每日挑战页
+      this.currentScene = new ResultScene(this, score, carsWon, -1, isWin, stars, () => {
+        this.showDaily()
+      })
+      this.currentScene.init()
+    })
+    this.currentScene = scene
     this.currentScene.init()
   },
 
