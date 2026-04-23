@@ -95,8 +95,11 @@ export default class LeaderboardScene {
 
   draw() {
     const { ctx, width: W, height: H } = this.game
-    const safeTop = this.game.safeTop || 0
-    const padX    = 14
+    const safeTop    = this.game.safeTop || 0
+    const statusBarH = this.game.statusBarHeight || 44
+    const padX       = 14
+    const capBtnY    = statusBarH + 6
+    const capCenterY = statusBarH + 22
 
     // ── 背景：天蓝渐变 ──
     const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -108,7 +111,7 @@ export default class LeaderboardScene {
     ctx.fillRect(0, 0, W, H)
 
     // ── 顶部导航栏 ──
-    const navH  = safeTop + 52
+    const navH  = safeTop + 10
     const navBg = ctx.createLinearGradient(0, 0, 0, navH)
     navBg.addColorStop(0, 'rgba(91,200,245,0.97)')
     navBg.addColorStop(1, 'rgba(91,200,245,0.85)')
@@ -117,36 +120,37 @@ export default class LeaderboardScene {
     ctx.fillRect(0, 0, W, navH)
     ctx.restore()
 
-    // 返回按钮
-    const btnY = safeTop + 10, btnH0 = 32, btnW0 = 68, btnX0 = padX
+    // 返回按钮（与微信胶囊同高）
+    const btnH0 = 32, btnW0 = 68, btnX0 = padX
+    const btnY0 = capBtnY
     ctx.save()
     ctx.fillStyle   = 'rgba(255,255,255,0.55)'
     ctx.strokeStyle = 'rgba(255,255,255,0.80)'
     ctx.lineWidth   = 1
-    roundRect(ctx, btnX0, btnY, btnW0, btnH0, btnH0 / 2)
+    roundRect(ctx, btnX0, btnY0, btnW0, btnH0, btnH0 / 2)
     ctx.fill(); ctx.stroke()
     ctx.font = 'bold 14px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#1a6090'
-    ctx.fillText('← 返回', btnX0 + btnW0 / 2, btnY + btnH0 / 2)
+    ctx.fillText('← 返回', btnX0 + btnW0 / 2, capCenterY)
     ctx.restore()
-    this._navBackBtn = { x: btnX0, y: btnY, w: btnW0, h: btnH0 }
+    this._navBackBtn = { x: btnX0, y: btnY0, w: btnW0, h: btnH0 }
 
-    // 页面标题
+    // 页面标题（与胶囊垂直中心对齐）
     ctx.save()
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(e('🏆 好友排行'), W / 2, safeTop + 26)
+    ctx.fillText(e('🏆 好友排行'), W / 2, capCenterY)
     ctx.restore()
 
-    // 右侧机会❤
+    // 右侧机会❤（与胶囊垂直中心对齐）
     const lives = getLives()
     ctx.save()
     ctx.font = '14px sans-serif'
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
     ctx.fillStyle = 'rgba(255,80,80,0.80)'
-    ctx.fillText('\u2665'.repeat(lives) + '\u2661'.repeat(Math.max(0, 3 - lives)), W - padX, safeTop + 26)
+    ctx.fillText('\u2665'.repeat(lives) + '\u2661'.repeat(Math.max(0, 3 - lives)), W - padX, capCenterY)
     ctx.restore()
 
     // ── 列表区 ──

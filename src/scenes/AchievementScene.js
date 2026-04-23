@@ -50,8 +50,11 @@ export default class AchievementScene {
   draw() {
     const { ctx, width: W, height: H } = this.game
     const safeTop    = this.game.safeTop || 0
+    const statusBarH = this.game.statusBarHeight || 44
     const achievements = CONFIG.ACHIEVEMENTS
     const unlocked     = this._unlocked
+    const capBtnY    = statusBarH + 6
+    const capCenterY = statusBarH + 22
 
     // ── 背景：天蓝渐变 ──
     const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -63,7 +66,7 @@ export default class AchievementScene {
     ctx.fillRect(0, 0, W, H)
 
     // ── 顶部导航栏 ──
-    const navH  = safeTop + 52
+    const navH  = safeTop + 10
     const navBg = ctx.createLinearGradient(0, 0, 0, navH)
     navBg.addColorStop(0, 'rgba(91,200,245,0.97)')
     navBg.addColorStop(1, 'rgba(91,200,245,0.85)')
@@ -72,8 +75,9 @@ export default class AchievementScene {
     ctx.fillRect(0, 0, W, navH)
     ctx.restore()
 
-    // 返回按钮
-    const btnY = safeTop + 10, btnH = 32, btnW = 68, btnX = 16
+    // 返回按钮（与微信胶囊同高）
+    const btnH = 32, btnW = 68, btnX = 16
+    const btnY = capBtnY
     ctx.save()
     ctx.fillStyle   = 'rgba(255,255,255,0.55)'
     ctx.strokeStyle = 'rgba(255,255,255,0.80)'
@@ -83,26 +87,26 @@ export default class AchievementScene {
     ctx.font = 'bold 14px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#1a6090'
-    ctx.fillText('← 返回', btnX + btnW / 2, btnY + btnH / 2)
+    ctx.fillText('← 返回', btnX + btnW / 2, capCenterY)
     ctx.restore()
     this._backBtn = { x: btnX, y: btnY, w: btnW, h: btnH }
 
-    // 页面标题（居中，白色）
+    // 页面标题（居中，与胶囊垂直中心对齐）
     const unlockCount = unlocked.size
     const total       = achievements.length
     ctx.save()
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(e('🏅 成就'), W / 2, safeTop + 26)
+    ctx.fillText(e('🏅 成就'), W / 2, capCenterY)
     ctx.restore()
 
-    // 右侧计数徽章
+    // 右侧计数徽章（与胶囊垂直中心对齐）
     ctx.save()
     ctx.font = 'bold 13px sans-serif'
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
     ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    ctx.fillText(`${unlockCount} / ${total}`, W - 16, safeTop + 26)
+    ctx.fillText(`${unlockCount} / ${total}`, W - 16, capCenterY)
     ctx.restore()
 
     // ── 滚动列表区域 ──

@@ -127,9 +127,12 @@ export default class DailyScene {
 
   draw() {
     const { ctx, width: W, height: H } = this.game
-    const safeTop = this.game.safeTop || 0
-    const cx      = W / 2
-    const padX    = 16
+    const safeTop    = this.game.safeTop || 0
+    const statusBarH = this.game.statusBarHeight || 44
+    const capBtnY    = statusBarH + 6
+    const capCenterY = statusBarH + 22
+    const cx         = W / 2
+    const padX       = 16
 
     // ── 背景：天蓝渐变 ──
     const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -141,7 +144,7 @@ export default class DailyScene {
     ctx.fillRect(0, 0, W, H)
 
     // ── 顶部导航栏 ──
-    const navH  = safeTop + 52
+    const navH  = safeTop + 10
     const navBg = ctx.createLinearGradient(0, 0, 0, navH)
     navBg.addColorStop(0, 'rgba(91,200,245,0.97)')
     navBg.addColorStop(1, 'rgba(91,200,245,0.85)')
@@ -150,27 +153,27 @@ export default class DailyScene {
     ctx.fillRect(0, 0, W, navH)
     ctx.restore()
 
-    // 返回按钮
-    const btnY = safeTop + 10, btnH0 = 32, btnW0 = 68
+    // 返回按钮（与微信胶囊同高）
+    const btnH0 = 32, btnW0 = 68
     ctx.save()
     ctx.fillStyle   = 'rgba(255,255,255,0.55)'
     ctx.strokeStyle = 'rgba(255,255,255,0.80)'
     ctx.lineWidth   = 1
-    roundRect(ctx, padX, btnY, btnW0, btnH0, btnH0 / 2)
+    roundRect(ctx, padX, capBtnY, btnW0, btnH0, btnH0 / 2)
     ctx.fill(); ctx.stroke()
     ctx.font = 'bold 14px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#1a6090'
-    ctx.fillText('← 返回', padX + btnW0 / 2, btnY + btnH0 / 2)
+    ctx.fillText('← 返回', padX + btnW0 / 2, capCenterY)
     ctx.restore()
-    this._navBackBtn = { x: padX, y: btnY, w: btnW0, h: btnH0 }
+    this._navBackBtn = { x: padX, y: capBtnY, w: btnW0, h: btnH0 }
 
-    // 页面标题
+    // 页面标题（与胶囊垂直中心对齐）
     ctx.save()
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(e('📅 每日挑战'), cx, safeTop + 26)
+    ctx.fillText(e('📅 每日挑战'), cx, capCenterY)
     ctx.restore()
 
     // ── 日期副标题 ──

@@ -24,10 +24,12 @@ const dpr = sysInfo.pixelRatio || 1
 // ✅ 动态计算安全顶部高度（状态栏 + 胶囊按钮区，适配刘海屏/安卓各机型）
 // statusBarHeight = 状态栏高度（系统级，各机型不同）
 // + 44 = 胶囊按钮高度（微信固定 32px）+ 上下各 6px 间距
-let safeTopHeight = 88  // 兜底默认值
+let statusBarHeight = 44  // 兜底默认值
+let safeTopHeight   = 88  // 兜底默认值
 try {
   const winInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
-  safeTopHeight = (winInfo.statusBarHeight || 0) + 44
+  statusBarHeight = winInfo.statusBarHeight || 44
+  safeTopHeight   = statusBarHeight + 44
 } catch (e) {}
 const safeTop = safeTopHeight
 
@@ -44,7 +46,8 @@ const Game = {
   ctx,
   width:   logicWidth,
   height:  logicHeight,
-  safeTop: safeTop,     // ✅ 动态安全顶，各场景统一从 this.game.safeTop 读取
+  safeTop:          safeTop,          // ✅ 动态安全顶，各场景统一从 this.game.safeTop 读取
+  statusBarHeight:  statusBarHeight,  // ✅ 状态栏高度，用于对齐微信胶囊按钮
   dpr,
   currentScene: null,
   // 好友助力提示（入场时短暂显示）

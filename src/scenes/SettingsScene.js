@@ -17,8 +17,12 @@ export default class SettingsScene {
 
   draw() {
     const { ctx, width: W, height: H } = this.game
-    const safeTop = this.game.safeTop || 0
-    const padX    = 16
+    const safeTop    = this.game.safeTop || 0
+    const statusBarH = this.game.statusBarHeight || 44
+    const padX       = 16
+    // 胶囊对齐：top = statusBarH+6，高32，中心 = statusBarH+22
+    const capBtnY    = statusBarH + 6   // 与微信胶囊同顶
+    const capCenterY = statusBarH + 22  // 胶囊垂直中心
 
     // ── 背景：天蓝渐变（与 StartScene 一致）──
     const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -30,7 +34,7 @@ export default class SettingsScene {
     ctx.fillRect(0, 0, W, H)
 
     // ── 顶部导航栏 ──
-    const navH   = safeTop + 52
+    const navH   = safeTop + 10
     const navBg  = ctx.createLinearGradient(0, 0, 0, navH)
     navBg.addColorStop(0, 'rgba(91,200,245,0.95)')
     navBg.addColorStop(1, 'rgba(91,200,245,0.80)')
@@ -39,11 +43,11 @@ export default class SettingsScene {
     ctx.fillRect(0, 0, W, navH)
     ctx.restore()
 
-    // 返回按钮（胶囊，左上角）
-    const btnY  = safeTop + 10
+    // 返回按钮（胶囊，与微信胶囊按钮同高）
     const btnH  = 32
     const btnW  = 68
     const btnX  = padX
+    const btnY  = capBtnY   // 与胶囊顶对齐
     ctx.save()
     ctx.fillStyle   = 'rgba(255,255,255,0.55)'
     ctx.strokeStyle = 'rgba(255,255,255,0.80)'
@@ -57,12 +61,12 @@ export default class SettingsScene {
     ctx.restore()
     this._backBtn = { x: btnX, y: btnY, w: btnW, h: btnH }
 
-    // 页面标题（居中）
+    // 页面标题（居中，与胶囊垂直中心对齐）
     ctx.save()
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(e('⚙ 设置'), W / 2, safeTop + 26)
+    ctx.fillText(e('⚙ 设置'), W / 2, capCenterY)
     ctx.restore()
 
     // ── 卡片区 ──

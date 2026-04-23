@@ -129,7 +129,7 @@ export default class GameScene {
   get cellGap()    { return 4 }
   get cellStep()   { return this.cellSize + this.cellGap }
   get safeTop()    { return this.game.safeTop }          // 动态安全顶，来自 game.js
-  get headerH()    { return this.game.safeTop + 88 }     // 安全区 + 两行 + 分隔线间距(88px)
+  get headerH()    { return (this.game.statusBarHeight || 44) + 108 } // 胶囊中心22 + 行间距+分隔线
   get boardTop()   { return this.headerH + 10 }          // header → 棋盘 间距 10px
   get boardH()     { return CONFIG.BOARD_ROWS * this.cellStep }
   get slotTop()    { return this.boardTop + this.boardH + 32 }
@@ -324,10 +324,11 @@ export default class GameScene {
     const movesLeft = logic.movesLeft
     const isWarn    = hasLimit && movesLeft <= 10
     const padX      = 16
-    const safe      = this.safeTop
+    const statusBarH = this.game.statusBarHeight || 44
+    const capCenterY = statusBarH + 22   // 与微信胶囊垂直中心对齐
 
     // ── 行1：「第N关」金色 + 「目标 ★★★」+ 撤销按钮 ──
-    const row1Y = safe + 28
+    const row1Y = capCenterY
 
     // 「第N关」金色粗体（左）
     ctx.save()
@@ -389,50 +390,11 @@ export default class GameScene {
     ctx.shadowBlur = 0
     ctx.restore()
 
-    // 撤销按钮（右上角，圆形图标风格）
-    const canUndo = logic.undoLeft > 0 && logic.undoStack.length > 0
-    const undoBtnSz = 36                             // 正方形圆角按钮
-    const undoX = width - padX - undoBtnSz
-    const undoY = row1Y - undoBtnSz / 2
-    ctx.save()
-    // 按钮背景：可用=橙色渐变；不可用=灰蓝
-    if (canUndo) {
-      const uBg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz)
-      uBg.addColorStop(0, '#FFB840')
-      uBg.addColorStop(1, '#FF8000')
-      ctx.fillStyle = uBg
-      ctx.shadowColor = 'rgba(255,140,0,0.50)'
-      ctx.shadowBlur  = 10
-    } else {
-      ctx.fillStyle = 'rgba(98, 167, 236, 0.35)'
-      ctx.shadowBlur = 0
-    }
-    roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz, 10); ctx.fill()
-    ctx.shadowBlur = 0
-    // 顶部高光
-    if (canUndo) {
-      const uHg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz * 0.5)
-      uHg.addColorStop(0, 'rgba(255,255,255,0.35)')
-      uHg.addColorStop(1, 'rgba(255,255,255,0)')
-      ctx.fillStyle = uHg
-      roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz * 0.5, { tl:10, tr:10, bl:0, br:0 }); ctx.fill()
-    }
-    // 撤销符号
-    ctx.font = `bold 18px sans-serif`
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = canUndo ? '#FFFFFF' : 'rgba(160,190,220,0.70)'
-    ctx.fillText('↩', undoX + undoBtnSz / 2, row1Y - 3)
-    // 次数小标（右下角角标）
-    ctx.font = `bold 9px sans-serif`
-    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'
-    ctx.fillStyle = canUndo ? 'rgba(255,255,255,0.90)' : 'rgba(160,190,220,0.60)'
-    ctx.fillText(`×${logic.undoLeft}`, undoX + undoBtnSz - 3, undoY + undoBtnSz - 2)
-    ctx.restore()
-    this._undoBtn = { x: undoX, y: undoY, w: undoBtnSz, h: undoBtnSz }
-
-    // ── 行2：得分 / 赢车 / 剩余步（三列，彩色数值）──
-    const row2Y = safe + 60
-    const dataW = width - padX * 2
+    // ── 行2：得分 / 赢车 / 剩余步（三列，右侧预留撤回按钮位置）──
+    const row2Y   = capCenterY + 44
+    const undoBtnSz = 36
+    const undoReserve = padX + undoBtnSz + 8   // 右侧为撤回按钮留出的空间
+    const dataW = width - padX - undoReserve    // 三列只占左侧区域
     const colW  = dataW / 3
 
     const cols = [
@@ -462,8 +424,48 @@ export default class GameScene {
       ctx.restore()
     })
 
+    // 撤销按钮（右侧，与 row2Y 垂直居中，避开微信胶囊按钮）
+    const canUndo = logic.undoLeft > 0 && logic.undoStack.length > 0
+    const undoX = width - padX - undoBtnSz
+    const undoY = row2Y - undoBtnSz / 2
+    ctx.save()
+    // 按钮背景：可用=橙色渐变；不可用=灰蓝
+    if (canUndo) {
+      const uBg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz)
+      uBg.addColorStop(0, '#FFB840')
+      uBg.addColorStop(1, '#FF8000')
+      ctx.fillStyle = uBg
+      ctx.shadowColor = 'rgba(255,140,0,0.50)'
+      ctx.shadowBlur  = 10
+    } else {
+      ctx.fillStyle = 'rgba(98, 167, 236, 0.35)'
+      ctx.shadowBlur = 0
+    }
+    roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz, 10); ctx.fill()
+    ctx.shadowBlur = 0
+    // 顶部高光
+    if (canUndo) {
+      const uHg = ctx.createLinearGradient(undoX, undoY, undoX, undoY + undoBtnSz * 0.5)
+      uHg.addColorStop(0, 'rgba(255,255,255,0.35)')
+      uHg.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = uHg
+      roundRect(ctx, undoX, undoY, undoBtnSz, undoBtnSz * 0.5, { tl:10, tr:10, bl:0, br:0 }); ctx.fill()
+    }
+    // 撤销符号
+    ctx.font = `bold 18px sans-serif`
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = canUndo ? '#FFFFFF' : 'rgba(160,190,220,0.70)'
+    ctx.fillText('↩', undoX + undoBtnSz / 2, undoY + undoBtnSz / 2)
+    // 次数小标（右下角角标）
+    ctx.font = `bold 9px sans-serif`
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'
+    ctx.fillStyle = canUndo ? 'rgba(255,255,255,0.90)' : 'rgba(160,190,220,0.60)'
+    ctx.fillText(`×${logic.undoLeft}`, undoX + undoBtnSz - 3, undoY + undoBtnSz - 2)
+    ctx.restore()
+    this._undoBtn = { x: undoX, y: undoY, w: undoBtnSz, h: undoBtnSz }
+
     // ── 数据行下方渐变分隔线（彩虹渐变细线，与数据行保留间距）──
-    const divY = safe + 84
+    const divY = capCenterY + 78
     ctx.save()
     const divGrad = ctx.createLinearGradient(padX, divY, width - padX, divY)
     divGrad.addColorStop(0,    'rgba(255,100,100,0.0)')

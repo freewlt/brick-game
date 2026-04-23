@@ -55,6 +55,8 @@ export default class StartScene {
   draw() {
     const { ctx, width, height } = this.game
     const H = height, W = width
+    const statusBarH = this.game.statusBarHeight || 44
+    const capCenterY = statusBarH + 22   // 与微信胶囊垂直中心对齐
 
     // ===== 背景：天蓝渐变 =====
     const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -96,8 +98,7 @@ export default class StartScene {
     ctx.restore()
 
     // ===== Y 坐标布局 =====
-    const trophyY  = H * 0.115
-    const titleY   = H * 0.205
+    const titleY   = H * 0.195
     const subY     = H * 0.275
     const carShowY = H * 0.385
     const roadY    = H * 0.465   // 路面线
@@ -113,11 +114,11 @@ export default class StartScene {
     ctx.save()
     ctx.globalAlpha = this.logoAlpha
 
-    // 奖杯（标题上方）
+    // 奖杯（与微信胶囊垂直中心对齐）
     ctx.font      = '28px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(e('🏆'), W / 2, trophyY)
+    ctx.fillText(e('🏆'), W / 2, capCenterY)
 
     // 标题"赢了个赢"——金色厚描边
     ctx.font = 'bold 56px sans-serif'
