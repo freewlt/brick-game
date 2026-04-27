@@ -93,9 +93,10 @@ function saveLevelProgress(levelIdx) {
 }
 
 // ==================== 排行榜 ====================
-const RANK_KEY = 'levelsPassed'
+const RANK_KEY        = 'levelsPassed'
+const MY_PROGRESS_KEY = 'ywgy_my_progress'
 
-// 上传通关数（通关时调用）
+// 上传通关数（通关时调用）并本地备份（排行榜显示自己用）
 function saveProgress(levelsPassed) {
   try {
     wx.setUserCloudStorage({
@@ -104,6 +105,33 @@ function saveProgress(levelsPassed) {
       fail: () => {},
     })
   } catch (e) {}
+  // 本地存一份，供排行榜把自己插入列表
+  try { wx.setStorageSync(MY_PROGRESS_KEY, levelsPassed) } catch (e) {}
+}
+
+// 读取本地缓存的自己通关数
+function getMyProgress() {
+  try {
+    const v = wx.getStorageSync(MY_PROGRESS_KEY)
+    return typeof v === 'number' ? v : 0
+  } catch (e) { return 0 }
+}
+
+// ==================== 我的用户信息缓存 ====================
+const MY_USERINFO_KEY = 'ywgy_my_userinfo'
+
+// 保存自己的头像和昵称（game.js init 时调用）
+function saveMyUserInfo(info) {
+  try { wx.setStorageSync(MY_USERINFO_KEY, info) } catch (e) {}
+}
+
+// 读取缓存的自己头像/昵称；无则返回默认值
+function getMyUserInfo() {
+  try {
+    const raw = wx.getStorageSync(MY_USERINFO_KEY)
+    if (raw && raw.nickname) return raw
+  } catch (e) {}
+  return { nickname: '我', avatarUrl: '' }
 }
 
 // 拉取好友排行数据，返回 Promise<Array<{nickname, avatarUrl, levelsPassed}>>
@@ -273,6 +301,25 @@ function checkAndUnlockAchievements(achievements, stats) {
   return newlyUnlocked
 }
 
+// ==================== 隐私授权 ====================
+// 微信要求：访问用户头像/昵称（getFriendCloudStorage）前必须完成隐私协议授权。
+// 使用 wx.requirePrivacyAuthorize 发起授权；若平台版本不支持则静默跳过。
+//
+// 用法：await requestPrivacyAuthorize()  →  true=已授权/无需授权，false=用户拒绝
+function requestPrivacyAuthorize() {
+  return new Promise((resolve) => {
+    // 低版本基础库不支持该 API，直接放行
+    if (typeof wx.requirePrivacyAuthorize !== 'function') {
+      resolve(true)
+      return
+    }
+    wx.requirePrivacyAuthorize({
+      success: () => resolve(true),   // 用户同意 或 今日已同意过
+      fail:    () => resolve(false),  // 用户拒绝
+    })
+  })
+}
+
 // ==================== 每日挑战 ====================
 const DAILY_KEY = 'ywgy_daily'
 
@@ -377,6 +424,9 @@ export {
   // 排行榜
   saveProgress,
   fetchFriendRank,
+  getMyProgress,
+  saveMyUserInfo,
+  getMyUserInfo,
   // 分享
   shareForLife,
   handleShareEntry,
@@ -394,4 +444,6 @@ export {
   getDailyState,
   saveDailyState,
   completeDailyChallenge,
+  // 隐私授权
+  requestPrivacyAuthorize,
 }

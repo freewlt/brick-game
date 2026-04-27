@@ -3,5 +3,6 @@
   "networkTimeout": {
     "request": 5000
   },
-  "subpackages": []
+  "subpackages": [],
+  "__usePrivacyCheck__": true
 }

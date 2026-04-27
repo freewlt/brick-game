@@ -50,6 +50,7 @@ const Game = {
   statusBarHeight:  statusBarHeight,  // ✅ 状态栏高度，用于对齐微信胶囊按钮
   dpr,
   currentScene: null,
+  _loopStarted: false,
   // 好友助力提示（入场时短暂显示）
   _shareToast: null,
 
@@ -64,14 +65,49 @@ const Game = {
       this._shareToast = { text: '🎁 好友助力！+1次机会', alpha: 1, frame: 0 }
     }
 
+    // 隐私授权 → 拉取并缓存自己的头像/昵称
+    this._initUserInfo()
+
     this.showStart()
     this.bindEvents()
+  },
+
+  // 隐私授权成功后立即拉取自己的头像和昵称并本地缓存
+  // 供排行榜场景识别"我"的条目时使用
+  _initUserInfo() {
+    const doFetch = () => {
+      wx.getUserInfo({
+        success(res) {
+          const info = res.userInfo || {}
+          if (info.nickName) {
+            saveMyUserInfo({
+              nickname:  info.nickName,
+              avatarUrl: info.avatarUrl || '',
+            })
+          }
+        },
+        fail() {},
+      })
+    }
+
+    if (typeof wx.requirePrivacyAuthorize === 'function') {
+      wx.requirePrivacyAuthorize({
+        success: () => doFetch(),
+        fail:    () => {},   // 用户拒绝，跳过
+      })
+    } else {
+      // 低版本基础库不支持隐私 API，直接拉取
+      doFetch()
+    }
   },
 
   showStart() {
     this.currentScene = new StartScene(this)
     this.currentScene.init()
-    this.loop()
+    if (!this._loopStarted) {
+      this._loopStarted = true
+      this.loop()
+    }
   },
 
   showGame(levelIdx = 0) {
