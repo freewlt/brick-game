@@ -1,11 +1,8 @@
 // 开始场景 - 赢了个赢（明亮蓝天主题）
-import { roundRect } from '../utils/draw.js'
+import { roundRect, stripVS } from '../utils/draw.js'
 import { getLives, getRecoverSecondsLeft, shareForLife, getLevelProgress } from '../utils/storage.js'
+const e = stripVS
 
-// 剥掉 \uFE0F 变体选择符，避免微信小游戏 Canvas 渲染成小方块
-function e(str) {
-  return str.replace(/\uFE0F/g, '')
-}
 
 export default class StartScene {
   constructor(game) {

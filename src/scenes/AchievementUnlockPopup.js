@@ -1,44 +1,15 @@
 // 成就解锁庆祝弹窗 - 赢了个赢
 // 横向3卡轮播，用于通关后展示新成就
-import { roundRect } from '../utils/draw.js'
+import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 
-function e(str) { return str.replace(/\uFE0F/g, '') }
+const e = stripVS
 
-// 四向玻璃高光卡片底（独立 helper）
-function drawGlassCard(ctx, x, y, w, h, r, baseColor) {
-  ctx.save()
-  ctx.fillStyle = baseColor
-  roundRect(ctx, x, y, w, h, r); ctx.fill()
-  // 顶部
-  const tg = ctx.createLinearGradient(x, y, x, y + h * 0.46)
-  tg.addColorStop(0,   'rgba(255,255,255,0.68)')
-  tg.addColorStop(0.5, 'rgba(255,255,255,0.20)')
-  tg.addColorStop(1,   'rgba(255,255,255,0.00)')
-  ctx.fillStyle = tg
-  roundRect(ctx, x, y, w, h * 0.46, { tl: r, tr: r, bl: 0, br: 0 }); ctx.fill()
-  // 左侧
-  const lg = ctx.createLinearGradient(x, y, x + w * 0.14, y)
-  lg.addColorStop(0, 'rgba(255,255,255,0.30)')
-  lg.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = lg
-  roundRect(ctx, x, y, w * 0.14, h, { tl: r, tr: 0, bl: r, br: 0 }); ctx.fill()
-  // 右侧
-  const rg = ctx.createLinearGradient(x + w, y, x + w - w * 0.10, y)
-  rg.addColorStop(0, 'rgba(255,255,255,0.16)')
-  rg.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = rg
-  roundRect(ctx, x + w - w * 0.10, y, w * 0.10, h, { tl: 0, tr: r, bl: 0, br: r }); ctx.fill()
-  // 底部
-  const bg = ctx.createLinearGradient(x, y + h, x, y + h - h * 0.16)
-  bg.addColorStop(0, 'rgba(255,255,255,0.20)')
-  bg.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = bg
-  roundRect(ctx, x, y + h - h * 0.16, w, h * 0.16, { tl: 0, tr: 0, bl: r, br: r }); ctx.fill()
-  // 边框
-  ctx.strokeStyle = 'rgba(200,235,255,0.72)'
-  ctx.lineWidth   = 1.2
-  roundRect(ctx, x, y, w, h, r); ctx.stroke()
-  ctx.restore()
+// 弹窗专用玻璃卡片：高光更亮，边框偏白
+const POPUP_GLASS_OPTS = {
+  topAlpha:  0.68,
+  midAlpha:  0.20,
+  sideAlpha: 0.30,
+  border:    'rgba(200,235,255,0.72)',
 }
 
 export default class AchievementUnlockPopup {
@@ -233,7 +204,7 @@ export default class AchievementUnlockPopup {
   _drawBigCard(ctx, ach, x, y, w, h) {
     const r = 20
     const baseColor = ach.color || '#2BAEE0'
-    drawGlassCard(ctx, x, y, w, h, r, baseColor)
+    drawGlassCard(ctx, x, y, w, h, r, baseColor, POPUP_GLASS_OPTS)
 
     // 名称标签
     const tagH = 24, tagPad = 12
@@ -275,7 +246,7 @@ export default class AchievementUnlockPopup {
   // 小卡（侧边）
   _drawSmallCard(ctx, ach, x, y, w, h) {
     const r = 16
-    drawGlassCard(ctx, x, y, w, h, r, 'rgba(40,100,200,0.55)')
+    drawGlassCard(ctx, x, y, w, h, r, 'rgba(40,100,200,0.55)', POPUP_GLASS_OPTS)
 
     ctx.save()
     ctx.globalAlpha = 0.75

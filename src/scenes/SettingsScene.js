@@ -1,8 +1,8 @@
 // 设置场景 - 赢了个赢（天蓝主题，对齐设计图）
-import { roundRect } from '../utils/draw.js'
+import { roundRect, stripVS } from '../utils/draw.js'
 import AudioManager  from '../utils/audio.js'
+const e = stripVS
 
-function e(str) { return str.replace(/\uFE0F/g, '') }
 
 export default class SettingsScene {
   constructor(game) {

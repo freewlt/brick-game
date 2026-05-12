@@ -1,9 +1,9 @@
 // 成就墙场景 - 赢了个赢（竖向列表，玻璃果冻卡片，惯性滚动）
-import { roundRect } from '../utils/draw.js'
+import { roundRect, stripVS } from '../utils/draw.js'
 import { getUnlockedAchievements } from '../utils/storage.js'
 import { CONFIG } from '../config.js'
+const e = stripVS
 
-function e(str) { return str.replace(/\uFE0F/g, '') }
 
 export default class AchievementScene {
   constructor(game) {

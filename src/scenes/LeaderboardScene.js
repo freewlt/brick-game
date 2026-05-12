@@ -1,27 +1,12 @@
 // 排行榜场景 - 赢了个赢（天蓝玻璃主题）
 // 主域直接调用 wx.getFriendCloudStorage + wx.getUserCloudStorage 取数，Canvas 自渲染列表
-import { roundRect } from '../utils/draw.js'
+import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { getLives, shareForLife, getMyUserInfo, getMyProgress, saveMyUserInfo } from '../utils/storage.js'
+const e = stripVS
 
 const RANK_KEY = 'levelsPassed'
 
-function e(str) { return str.replace(/️/g, '') }
 
-function drawGlassCard(ctx, x, y, w, h, r, baseColor) {
-  ctx.save()
-  ctx.fillStyle = baseColor
-  roundRect(ctx, x, y, w, h, r); ctx.fill()
-  const tg = ctx.createLinearGradient(x, y, x, y + h * 0.44)
-  tg.addColorStop(0,   'rgba(255,255,255,0.62)')
-  tg.addColorStop(0.5, 'rgba(255,255,255,0.18)')
-  tg.addColorStop(1,   'rgba(255,255,255,0.00)')
-  ctx.fillStyle = tg
-  roundRect(ctx, x, y, w, h * 0.44, { tl: r, tr: r, bl: 0, br: 0 }); ctx.fill()
-  ctx.strokeStyle = 'rgba(160,215,245,0.60)'
-  ctx.lineWidth   = 1.2
-  roundRect(ctx, x, y, w, h, r); ctx.stroke()
-  ctx.restore()
-}
 
 function drawCircleAvatar(ctx, img, cx, cy, r) {
   ctx.save()
@@ -274,7 +259,7 @@ export default class LeaderboardScene {
     if (this._denied) {
       // 用户本次会话拒绝了隐私授权 → 显示提示
       const cx = W / 2, cy = listTop + listH / 2
-      drawGlassCard(ctx, padX, cy - 54, W - padX * 2, 108, 16, 'rgba(220,240,255,0.80)')
+      drawGlassCard(ctx, padX, cy - 54, W - padX * 2, 108, 16, 'rgba(220,240,255,0.80)', { sides: 'top' })
       ctx.save()
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
       ctx.font = 'bold 16px sans-serif'
@@ -335,7 +320,7 @@ export default class LeaderboardScene {
 
     // 返回按钮（底部）
     const backBtnX = padX + bw2 + 12
-    drawGlassCard(ctx, backBtnX, btnAreaY, bw2, btnH, btnR, 'rgba(220,240,255,0.70)')
+    drawGlassCard(ctx, backBtnX, btnAreaY, bw2, btnH, btnR, 'rgba(220,240,255,0.70)', { sides: 'top' })
     ctx.save()
     ctx.font = 'bold 15px sans-serif'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
@@ -359,7 +344,8 @@ export default class LeaderboardScene {
       const cardX = padX
 
       drawGlassCard(ctx, cardX, cardY, cardW, CARD_H, 12,
-        item.isSelf ? 'rgba(47,212,114,0.20)' : 'rgba(220,240,255,0.65)')
+        item.isSelf ? 'rgba(47,212,114,0.20)' : 'rgba(220,240,255,0.65)',
+        { sides: 'top' })
 
       // 名次 / 奖牌
       ctx.save()

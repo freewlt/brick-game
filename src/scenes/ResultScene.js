@@ -1,49 +1,9 @@
 // 结算场景 - 赢了个赢（天蓝玻璃主题）
-import { roundRect } from '../utils/draw.js'
+import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { spendLife, getLives, getRecoverSecondsLeft, shareForLife, saveProgress } from '../utils/storage.js'
 import { CONFIG } from '../config.js'
 
-// 剥掉 \uFE0F 变体选择符，避免微信小游戏 Canvas 渲染成小方块
-function e(str) {
-  return str.replace(/\uFE0F/g, '')
-}
-
-// 四向玻璃高光（复用 SettingsScene / AchievementScene 同款）
-function drawGlassCard(ctx, x, y, w, h, r, baseColor) {
-  ctx.save()
-  ctx.fillStyle = baseColor
-  roundRect(ctx, x, y, w, h, r); ctx.fill()
-  // 顶部高光
-  const tg = ctx.createLinearGradient(x, y, x, y + h * 0.44)
-  tg.addColorStop(0,   'rgba(255,255,255,0.62)')
-  tg.addColorStop(0.5, 'rgba(255,255,255,0.18)')
-  tg.addColorStop(1,   'rgba(255,255,255,0.00)')
-  ctx.fillStyle = tg
-  roundRect(ctx, x, y, w, h * 0.44, { tl: r, tr: r, bl: 0, br: 0 }); ctx.fill()
-  // 左侧
-  const lg = ctx.createLinearGradient(x, y, x + w * 0.14, y)
-  lg.addColorStop(0, 'rgba(255,255,255,0.28)')
-  lg.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = lg
-  roundRect(ctx, x, y, w * 0.14, h, { tl: r, tr: 0, bl: r, br: 0 }); ctx.fill()
-  // 右侧
-  const rg = ctx.createLinearGradient(x + w, y, x + w - w * 0.10, y)
-  rg.addColorStop(0, 'rgba(255,255,255,0.16)')
-  rg.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = rg
-  roundRect(ctx, x + w - w * 0.10, y, w * 0.10, h, { tl: 0, tr: r, bl: 0, br: r }); ctx.fill()
-  // 底部反光
-  const bg2 = ctx.createLinearGradient(x, y + h, x, y + h - h * 0.16)
-  bg2.addColorStop(0, 'rgba(255,255,255,0.20)')
-  bg2.addColorStop(1, 'rgba(255,255,255,0.00)')
-  ctx.fillStyle = bg2
-  roundRect(ctx, x, y + h - h * 0.16, w, h * 0.16, { tl: 0, tr: 0, bl: r, br: r }); ctx.fill()
-  // 边框
-  ctx.strokeStyle = 'rgba(160,215,245,0.60)'
-  ctx.lineWidth   = 1.2
-  roundRect(ctx, x, y, w, h, r); ctx.stroke()
-  ctx.restore()
-}
+const e = stripVS
 
 export default class ResultScene {
   // onClose: 可选回调，每日挑战模式下点"返回"时触发（替代跳下一关逻辑）
