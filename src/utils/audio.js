@@ -6,6 +6,7 @@ const AudioManager = {
   _enabled: true,
   _bgmPlaying: false,
   _bgmTimer: null,
+  _bgmNoteTimers: [],   // BGM 循环内每个音符的 setTimeout 句柄，stopBGM 时统一清掉
 
   // ========== 初始化 ==========
   init() {
@@ -314,15 +315,20 @@ const AudioManager = {
     const beatLen = 0.25  // 每拍 0.25s，BPM=120
     pattern.forEach((note, i) => {
       if (note.freq === 0) return
-      setTimeout(() => {
+      const t = setTimeout(() => {
         if (this._bgmPlaying) {
           this._marimba(note.freq, note.dur, note.vol)
         }
       }, i * beatLen * 1000)
+      this._bgmNoteTimers.push(t)
     })
 
     const totalLen = pattern.length * beatLen * 1000
-    this._bgmTimer = setTimeout(() => this._scheduleBGM(), totalLen)
+    this._bgmTimer = setTimeout(() => {
+      // 一轮播完，先清掉已派发的句柄数组，再继续下一轮
+      this._bgmNoteTimers = []
+      this._scheduleBGM()
+    }, totalLen)
   },
 
   stopBGM() {
@@ -331,6 +337,9 @@ const AudioManager = {
       clearTimeout(this._bgmTimer)
       this._bgmTimer = null
     }
+    // 清掉本轮所有还在队列里的音符 timer，避免离开场景后仍然空跑
+    for (const t of this._bgmNoteTimers) clearTimeout(t)
+    this._bgmNoteTimers = []
   },
 
   // ========== 开关 ==========
