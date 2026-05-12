@@ -13,12 +13,14 @@
 
 ## 2. Scope
 
-- **包含**：`src/` 与 `game.js` 现有代码
+- **包含**：
+  - `src/` 与 `game.js` 现有代码的性能/可维护性修复（15 项 H/M/L）
+  - **建立 vitest 单测基础设施**，覆盖 `GameLogic` 核心方法（保护后续逻辑层重构）
+  - **统一 wx API 调用层**，集中 try/catch 与失败上报（console.warn 结构化日志）
 - **不包含**：
-  - 游戏玩法/数值平衡调整（这是产品决策，不是代码优化）
+  - 游戏玩法/数值平衡调整（产品决策，非代码优化）
   - 新功能（成就/关卡/广告等）
-  - 重构整套场景架构（拆分 GameScene 的更激进做法，留待后续）
-  - 引入单测基础设施（项目当前无 npm/test 配置，需另立项）
+  - 完整重构 GameScene 拆分（拆分 `_drawHeader`/`_drawBoard`/`_drawSlot` 等私有方法，留待后续）
 
 ## 3. 现状评估
 
@@ -29,10 +31,10 @@
 | 公共代码 | `drawGlassCard` × 4 副本、`function e(str)` × 6 副本 |
 | 渲染 | 每帧 requestAnimationFrame 重绘全场景，无脏区/缓存 |
 | 热路径分配 | 每帧创建大量 `createLinearGradient` 对象、`new Set` 扫描棋盘 |
-| 测试 | 无单测基础设施，纯人工验证 |
-| 错误处理 | wx API 调用普遍 try/catch + 静默失败，无统一上报 |
+| 测试 | 无单测基础设施，纯人工验证（本 plan 将引入 vitest + GameLogic 单测） |
+| 错误处理 | wx API 调用普遍 try/catch + 静默失败，无统一上报（本 plan 将引入 wxApi 封装层） |
 
-## 4. 识别的问题（共 15 项）
+## 4. 识别的问题（共 17 项：15 项代码缺陷 + 2 项基础设施）
 
 ### 4.1 🔴 高优先级 — 影响功能/稳定性
 
@@ -64,9 +66,16 @@
 | L6 | `YOUR_AD_UNIT_ID` 占位符仍在代码 | [GameScene.js:1170](../../../src/scenes/GameScene.js#L1170) | 上线前必改，且应提到 config |
 | L7 | `getStackDepth` 过度防御性判断 | [GameLogic.js:375-377](../../../src/logic/GameLogic.js#L375) | board 已固定 7×7，条件永真，是死代码 |
 
+### 4.4 ⚙️ 基础设施 — 工具链与可观测性
+
+| # | 问题 | 当前状态 | 影响 | 期望 |
+|---|------|---------|------|------|
+| I1 | 项目无单测基础设施 | 无 `package.json` 中的 test 脚本、无 vitest/jest/mocha | 逻辑变更只能靠人工验证，A1/C3 等核心逻辑修改风险大 | 引入 vitest，覆盖 `GameLogic` 核心方法（initLevel/clickCell/undo/_checkMatch/useShuffle/calcStars），后续逻辑层修改先跑测试 |
+| I2 | wx API 调用散落各处，失败静默 | `try { wx.setStorageSync(...) } catch (e) {}` 这种模式遍布 storage.js / LeaderboardScene / game.js / GameScene | 出问题无线索，调试只能靠 console.log；隐私授权失败、storage 配额超限等都无感知 | 统一 `src/utils/wxApi.js` 封装层：`storage.get/set` / `ad.showRewarded` / `share.send` / `auth.requirePrivacy` / `userInfo.get`，失败统一 `console.warn('[wxApi] ${api} failed:', err)` |
+
 ## 5. 验收标准
 
-- ✅ 所有 H/M/L 项都有对应 Task 修复（已落实于 plan）
+- ✅ 所有 H/M/L + I 项都有对应 Task 修复（已落实于 plan）
 - ✅ 每个 Task 一个独立 commit，commit message 与 plan 一致
 - ✅ 修复后所有文件通过 node --check 语法验证
 - ✅ 微信开发者工具实机验证 5 个核心路径无回归：
@@ -77,27 +86,32 @@
   - 每日挑战 + 成就墙
 - ✅ `grep -rn "hexToRgb\|YOUR_AD_UNIT_ID" src/` 无残留
 - ✅ `drawGlassCard` 和 `function e(str)` 仅在 `src/utils/draw.js` 出现一次
+- ✅ `npm test` 通过，至少 20 个用例覆盖 `GameLogic` 关键方法
+- ✅ `grep -rn "wx\.\(getStorageSync\|setStorageSync\|shareAppMessage\|requirePrivacyAuthorize\|getUserProfile\|createRewardedVideoAd\)" src/` 仅在 `src/utils/wxApi.js` 出现
 
 ## 6. 非目标（明确不做）
 
 - **不做完整 GameScene 拆分**：plan 中 B1 只抽出 `FloatText`/`MatchParticle`，不动 `_drawHeader`/`_drawBoard`/`_drawSlot` 等私有方法。这些方法虽然胖但耦合棋盘状态，拆分需要架构决策，不在本次范围。
-- **不引入构建工具/打包**：保持微信开发者工具直接打开的开发体验。
-- **不重写 wx API 调用约定**：现有 try/catch + 静默失败的模式贯穿全项目，统一改造另立 spec。
+- **不引入构建工具/打包**：保持微信开发者工具直接打开的开发体验。`package.json` 仅作为 vitest 入口，`node_modules` 由 `.gitignore` 排除，不影响小游戏发布包。
 - **不引入 TypeScript**：纯 JS 项目，本次不做语言层升级。
+- **不为渲染层（场景）写单测**：单测只覆盖 `GameLogic` 与 `src/utils/storage.js` 等纯逻辑模块；Canvas/wx API 涉及的场景层不在本次单测范围。
+- **不接入第三方 telemetry SDK**：wxApi 失败上报只走 `console.warn`，不引入 Sentry/友盟等。
 
 ## 7. 风险与缓解
 
 | 风险 | 概率 | 影响 | 缓解 |
 |------|------|------|------|
-| 浅拷贝快照在某种边界条件下导致撤销错乱 | 低 | 高（撤销错乱是游戏卡死风险） | 自检 `_checkMatch`/`useShuffle` 是否会变异 car 对象；plan 中保留回滚到深拷贝的方案 |
-| `isBlocked` 缓存增量更新点漏改 | 中 | 中（遮挡显示错） | plan 中所有 board 整体改动点（init/shuffle/undo/click pop）都列了维护调用 |
+| 浅拷贝快照在某种边界条件下导致撤销错乱 | 低 | 高（撤销错乱是游戏卡死风险） | 自检 `_checkMatch`/`useShuffle` 是否会变异 car 对象；plan 中保留回滚到深拷贝的方案；I1 引入的单测会覆盖 |
+| `isBlocked` 缓存增量更新点漏改 | 中 | 中（遮挡显示错） | plan 中所有 board 整体改动点（init/shuffle/undo/click pop）都列了维护调用；I1 引入的单测会覆盖 |
 | 隐私授权状态共享后某场景未触发兜底 | 低 | 中（无法看排行榜） | LeaderboardScene 仍保留「未问过 → 当场调一次」的分支 |
 | commit 拆分太细导致 PR 噪音 | 中 | 低 | 每 commit 一个 Task 不可再拆；接受这个噪音换取可回滚性 |
+| wxApi 封装引入回归（参数/回调签名错） | 中 | 中 | 封装层只做转发，保留原 success/fail 回调形态；I1 的单测无法覆盖 wxApi（依赖 wx 全局），用人工实机验证 5 个核心路径 |
+| `node_modules` 误打包进小游戏发布包 | 低 | 中（包体积爆） | `.gitignore` 与微信开发者工具的 `miniprogramRoot`/`packOptions.ignore` 双重排除 |
 
 ## 8. 后续工作（不在本 spec 范围）
 
-- 引入 vitest + 抽 logic 层做单测（撤销/消除/星级评定/每日挑战种子生成）
 - `GameScene` 完整拆分：按职责拆 5 个文件（`renderHeader.js`/`renderBoard.js`/`renderSlot.js`/`renderProps.js`/`touchHandler.js`）
-- 统一 wx API 调用层（封装 `wxStorage`/`wxAuth`/`wxAd`/`wxShare`），把 try/catch 收敛到一处
 - 离屏 canvas 预渲染车块图块，棋盘渲染从「每帧 49 格 × 4 渐变」降为「49 次 drawImage」
 - 用 prompt 形式将「赢了个赢」中所有 UI 文案抽到 `src/i18n.js`，为多语言版本铺路
+- 接入第三方 telemetry SDK（Sentry / 友盟），把 wxApi 的 `console.warn` 升级为线上上报
+- 扩大单测覆盖：场景层用 mock-canvas 测试触摸命中区域与状态机

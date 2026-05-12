@@ -770,12 +770,680 @@ git commit -m "refactor(logic): drop defensive null checks in getStackDepth"
 
 ---
 
+---
+
+## Phase D：基础设施（4 项，I1 + I2）
+
+### Task D1：建立 vitest 单测基础设施
+
+引入 vitest 作为 Node 端测试运行器。微信小游戏发布包不含 `node_modules`（由 `project.config.json` 的 `packOptions.ignore` 排除），仅本地开发用。
+
+**Files:**
+- Create: `package.json`
+- Create: `.gitignore`（追加 node_modules 规则；如已存在则只追加）
+- Create: `vitest.config.js`
+- Modify: `project.config.json`（追加 `packOptions.ignore`）
+
+- [ ] **Step 1：检查现有 `.gitignore` 与 `project.config.json`**
+
+```bash
+test -f .gitignore && cat .gitignore || echo "(no .gitignore)"
+cat project.config.json | python -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('packOptions', {}), ensure_ascii=False, indent=2))"
+```
+
+记录现有内容，下面的 Step 在其基础上追加，不覆盖。
+
+- [ ] **Step 2：创建 `package.json`**
+
+```json
+{
+  "name": "ywgy-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test":       "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}
+```
+
+- [ ] **Step 3：创建 `vitest.config.js`**
+
+```js
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    include: ['tests/**/*.test.js'],
+    globals: false,
+    environment: 'node',
+  },
+})
+```
+
+- [ ] **Step 4：追加 `.gitignore` 规则**
+
+如已存在则在末尾追加；不存在则创建：
+
+```
+node_modules/
+coverage/
+.vitest-cache/
+```
+
+- [ ] **Step 5：追加 `project.config.json` 的 packOptions.ignore**
+
+读取现有 `project.config.json`，在 `packOptions.ignore` 数组（不存在则创建）追加以下规则，确保小游戏打包时排除 dev 文件：
+
+```json
+{
+  "type": "folder",
+  "value": "node_modules"
+},
+{
+  "type": "folder",
+  "value": "tests"
+},
+{
+  "type": "folder",
+  "value": "docs"
+},
+{
+  "type": "file",
+  "value": "package.json"
+},
+{
+  "type": "file",
+  "value": "package-lock.json"
+},
+{
+  "type": "file",
+  "value": "vitest.config.js"
+}
+```
+
+- [ ] **Step 6：安装依赖并验证**
+
+```bash
+npm install
+npx vitest run --reporter=verbose 2>&1 | head -20
+```
+
+Expected：vitest 启动，提示 "No test files found"（因为 D2 还没写）。如果安装失败（无网络/权限），降级方案是只提交配置文件，user 自己跑 npm install。
+
+- [ ] **Step 7：提交（不提交 node_modules）**
+
+```bash
+git add package.json vitest.config.js .gitignore project.config.json
+# 不要 add package-lock.json 如果你不确定它会带哪些字段（先看一下）
+ls package-lock.json 2>/dev/null && git add package-lock.json
+git commit -m "build: add vitest infrastructure for logic-layer unit tests"
+```
+
+---
+
+### Task D2：GameLogic 核心单测
+
+为 `GameLogic` 写 20+ 用例，覆盖：`initLevel` / `clickCell` / `undo` / `_checkMatch` / `useShuffle` / `useExpand` / `calcStars` / `isBlocked`。这些是后续 C3、A1 等逻辑修改的安全网。
+
+**Files:**
+- Create: `tests/GameLogic.test.js`
+
+- [ ] **Step 1：创建测试文件骨架**
+
+```js
+import { describe, it, expect, beforeEach } from 'vitest'
+import GameLogic from '../src/logic/GameLogic.js'
+
+describe('GameLogic', () => {
+  let g
+  beforeEach(() => { g = new GameLogic() })
+
+  describe('initLevel', () => {
+    it('第 1 关：3 车型 × 3 组 × 3 块 = 27 辆，maxMoves=45', () => {
+      g.initLevel(0)
+      expect(g.totalCars).toBe(27)
+      expect(g.maxMoves).toBe(45)
+      expect(g.slot).toEqual([])
+      expect(g.score).toBe(0)
+      expect(g.win).toBe(false)
+      expect(g.gameOver).toBe(false)
+    })
+
+    it('第 10 关：8 车型 × 4 组 × 3 块 = 96 辆，maxMoves=116', () => {
+      g.initLevel(9)
+      expect(g.totalCars).toBe(96)
+      expect(g.maxMoves).toBe(116)
+    })
+
+    it('超出关卡数兜底取最后一关', () => {
+      g.initLevel(9999)
+      expect(g.totalCars).toBe(96 * 1 || g.totalCars)  // 兜底取最后一关，具体数值不强查
+      expect(g.maxMoves).toBeGreaterThan(0)
+    })
+
+    it('棋盘车块总数等于 totalCars', () => {
+      g.initLevel(0)
+      let n = 0
+      for (const row of g.board) for (const stack of row) n += stack.length
+      expect(n).toBe(g.totalCars)
+    })
+  })
+
+  describe('clickCell', () => {
+    it('点空格返回 false', () => {
+      g.initLevel(0)
+      // 找一个空格
+      let r = -1, c = -1
+      outer: for (let rr = 0; rr < 7; rr++) {
+        for (let cc = 0; cc < 7; cc++) {
+          if (g.board[rr][cc].length === 0) { r = rr; c = cc; break outer }
+        }
+      }
+      if (r === -1) return  // 第 1 关 27 辆铺不满 49 格，必有空格
+      expect(g.clickCell(r, c)).toBe(false)
+    })
+
+    it('点被遮挡的格子返回 "blocked"', () => {
+      g.initLevel(0)
+      // 构造遮挡场景：找一列上方有车下方也有车的格子
+      for (let c = 0; c < 7; c++) {
+        let topR = -1
+        for (let r = 0; r < 7; r++) {
+          if (g.board[r][c].length > 0) {
+            if (topR === -1) { topR = r; continue }
+            // 找到了上方有车的 c 列、下方非空的 r 行
+            expect(g.clickCell(r, c)).toBe('blocked')
+            return
+          }
+        }
+      }
+    })
+
+    it('点合法格子后 car 进 slot，moves+1', () => {
+      g.initLevel(0)
+      // 找第 0 行任意有车的格子（顶层不可能被遮挡）
+      for (let c = 0; c < 7; c++) {
+        if (g.board[0][c].length > 0) {
+          const before = g.slot.length
+          const movesBefore = g.moves
+          expect(g.clickCell(0, c)).toBe(true)
+          expect(g.slot.length).toBe(before + 1)
+          expect(g.moves).toBe(movesBefore + 1)
+          return
+        }
+      }
+    })
+
+    it('集齐 3 辆同色后自动消除，carsWon += 3', () => {
+      g.initLevel(0)
+      // 强行清空棋盘并手工放 3 辆同色车，验证 _checkMatch
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[0][0].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][1].push({ id: 2, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][2].push({ id: 3, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.totalCars = 3
+      g.clickCell(0, 0)
+      g.clickCell(0, 1)
+      g.clickCell(0, 2)
+      expect(g.carsWon).toBe(3)
+      expect(g.slot.length).toBe(0)
+      expect(g.win).toBe(true)
+    })
+  })
+
+  describe('undo', () => {
+    it('点一次后撤销，回到初始状态', () => {
+      g.initLevel(0)
+      const initialSlotLen = g.slot.length
+      // 找第 0 行第一个有车的格子
+      for (let c = 0; c < 7; c++) {
+        if (g.board[0][c].length > 0) {
+          const carBefore = g.board[0][c][g.board[0][c].length - 1]
+          const carBeforeType = carBefore.type
+          g.clickCell(0, c)
+          expect(g.slot.length).toBe(initialSlotLen + 1)
+          expect(g.undo()).toBe(true)
+          expect(g.slot.length).toBe(initialSlotLen)
+          // 撤销后该格顶部应该回到原来那辆车的 type
+          const top = g.board[0][c][g.board[0][c].length - 1]
+          expect(top.type).toBe(carBeforeType)
+          return
+        }
+      }
+    })
+
+    it('撤销后剩余次数 -1', () => {
+      g.initLevel(0)
+      expect(g.undoLeft).toBe(1)
+      for (let c = 0; c < 7; c++) {
+        if (g.board[0][c].length > 0) {
+          g.clickCell(0, c)
+          g.undo()
+          expect(g.undoLeft).toBe(0)
+          return
+        }
+      }
+    })
+
+    it('无快照时撤销返回 false', () => {
+      g.initLevel(0)
+      expect(g.undo()).toBe(false)
+    })
+
+    it('撤销次数为 0 时返回 false', () => {
+      g.initLevel(0)
+      g.undoLeft = 0
+      for (let c = 0; c < 7; c++) {
+        if (g.board[0][c].length > 0) {
+          g.clickCell(0, c)
+          expect(g.undo()).toBe(false)
+          return
+        }
+      }
+    })
+
+    it('浅拷贝快照后再消除：撤销能正确恢复 score/combo/carsWon', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[0][0].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][1].push({ id: 2, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][2].push({ id: 3, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.totalCars = 3
+      g.clickCell(0, 0)
+      g.clickCell(0, 1)
+      // 第 3 次点击触发消除：此时快照应保存 slot=[type0, type0]，撤销可回退
+      const scoreBefore3rd = g.score
+      const carsWonBefore3rd = g.carsWon
+      g.clickCell(0, 2)
+      expect(g.carsWon).toBe(3)
+      expect(g.undo()).toBe(true)
+      expect(g.carsWon).toBe(carsWonBefore3rd)
+      expect(g.score).toBe(scoreBefore3rd)
+      expect(g.slot.length).toBe(2)  // 撤销回 2 车
+    })
+  })
+
+  describe('useExpand', () => {
+    it('扩槽：slotMax 6 → 7', () => {
+      g.initLevel(0)
+      expect(g.slotMax).toBe(6)
+      expect(g.useExpand()).toBe('ok')
+      expect(g.slotMax).toBe(7)
+    })
+
+    it('扩槽道具耗尽时返回 empty', () => {
+      g.initLevel(0)
+      g.expandLeft = 0
+      expect(g.useExpand()).toBe('empty')
+    })
+
+    it('已扩槽再扩返回 maxed', () => {
+      g.initLevel(0)
+      g.useExpand()
+      g.expandLeft = 1
+      expect(g.useExpand()).toBe('maxed')
+    })
+  })
+
+  describe('useShuffle', () => {
+    it('洗牌后车块总数不变', () => {
+      g.initLevel(0)
+      const before = g.getRemainingCount()
+      expect(g.useShuffle()).toBe('ok')
+      expect(g.getRemainingCount()).toBe(before)
+    })
+
+    it('棋盘空时洗牌返回 board_empty', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      expect(g.useShuffle()).toBe('board_empty')
+    })
+
+    it('洗牌次数耗尽返回 empty', () => {
+      g.initLevel(0)
+      g.shuffleLeft = 0
+      expect(g.useShuffle()).toBe('empty')
+    })
+  })
+
+  describe('calcStars', () => {
+    it('未通关返回 0 星', () => {
+      g.initLevel(0)
+      expect(g.calcStars()).toBe(0)
+    })
+
+    it('剩余步数 >= 50% 给 3 星', () => {
+      g.initLevel(0)
+      g.win = true
+      g.moves = Math.floor(g.maxMoves * 0.4)  // 用了 40%，剩 60%
+      expect(g.calcStars()).toBe(3)
+    })
+
+    it('剩余步数 30%~50% 给 2 星', () => {
+      g.initLevel(0)
+      g.win = true
+      g.moves = Math.floor(g.maxMoves * 0.6)  // 用了 60%，剩 40%
+      expect(g.calcStars()).toBe(2)
+    })
+
+    it('剩余步数 < 30% 给 1 星', () => {
+      g.initLevel(0)
+      g.win = true
+      g.moves = Math.floor(g.maxMoves * 0.8)  // 用了 80%，剩 20%
+      expect(g.calcStars()).toBe(1)
+    })
+  })
+
+  describe('isBlocked', () => {
+    it('第 0 行永不被遮挡', () => {
+      g.initLevel(0)
+      for (let c = 0; c < 7; c++) {
+        expect(g.isBlocked(0, c)).toBe(false)
+      }
+    })
+
+    it('上方有车则被遮挡', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[0][3].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      expect(g.isBlocked(3, 3)).toBe(true)
+      expect(g.isBlocked(3, 4)).toBe(false)  // 邻列不影响
+    })
+  })
+})
+```
+
+- [ ] **Step 2：运行 vitest 确认通过**
+
+```bash
+npx vitest run
+```
+
+Expected：至少 20 个 passing，0 failing。
+
+- [ ] **Step 3：如有失败，先检查测试逻辑再修代码**
+
+如果测试失败：
+- 失败用例如果是测试自身的错（断言写错、初始状态没建好），改测试
+- 失败用例如果是真 bug（A1 的浅拷贝引入回归），停下来报告 BLOCKED
+
+- [ ] **Step 4：提交**
+
+```bash
+git add tests/GameLogic.test.js
+git commit -m "test(logic): add vitest unit tests for GameLogic core methods"
+```
+
+---
+
+### Task D3：创建 `wxApi.js` 封装层
+
+统一 wx API 调用入口。失败统一 `console.warn('[wxApi] ${api} failed:', err)`，让调试有迹可循。封装时保留原 success/fail/complete 回调签名，避免大改 caller。
+
+**Files:**
+- Create: `src/utils/wxApi.js`
+
+- [ ] **Step 1：列出当前用到的 wx API**
+
+```bash
+grep -rno "wx\.\w\+" src/ game.js | sort -u
+```
+
+预期会看到：`wx.createCanvas`, `wx.getSystemInfoSync`, `wx.getWindowInfo`, `wx.onTouchStart/End/Move`, `wx.getStorageSync`, `wx.setStorageSync`, `wx.shareAppMessage`, `wx.getLaunchOptionsSync`, `wx.requirePrivacyAuthorize`, `wx.getUserProfile`, `wx.getUserInfo`, `wx.getFriendCloudStorage`, `wx.setUserCloudStorage`, `wx.getUserCloudStorage`, `wx.createImage`, `wx.createWebAudioContext`, `wx.createRewardedVideoAd`。
+
+底层一次性 API（`createCanvas`/`createImage`/`getSystemInfoSync`/`onTouchStart` 等）不封装，本任务只封装 **storage / share / auth / userInfo / cloudStorage / ad** 这 6 类。
+
+- [ ] **Step 2：创建 `src/utils/wxApi.js`**
+
+```js
+// wx API 统一封装层
+// 目的：集中 try/catch、失败统一 console.warn 上报、便于后续接入 telemetry SDK
+// 不封装：底层硬件 API（createCanvas/createImage/onTouchStart 等），保持直接调用
+
+function warn(api, err) {
+  // eslint-disable-next-line no-console
+  console.warn(`[wxApi] ${api} failed:`, err)
+}
+
+// ── 本地存储 ──────────────────────────────────────────────────
+export const storage = {
+  get(key, defaultVal = null) {
+    try {
+      const v = wx.getStorageSync(key)
+      return v === '' || v === undefined ? defaultVal : v
+    } catch (e) { warn('getStorageSync', e); return defaultVal }
+  },
+  set(key, value) {
+    try { wx.setStorageSync(key, value); return true }
+    catch (e) { warn('setStorageSync', e); return false }
+  },
+}
+
+// ── 分享 ──────────────────────────────────────────────────────
+export const share = {
+  send({ title, imageUrl, query = '', onSuccess, onFail }) {
+    try {
+      wx.shareAppMessage({
+        title, imageUrl, query,
+        success: () => { onSuccess && onSuccess() },
+        fail:    (e) => { warn('shareAppMessage', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('shareAppMessage', e); onFail && onFail(e) }
+  },
+  getLaunchQuery() {
+    try { return (wx.getLaunchOptionsSync().query) || {} }
+    catch (e) { warn('getLaunchOptionsSync', e); return {} }
+  },
+}
+
+// ── 隐私授权 ──────────────────────────────────────────────────
+export const auth = {
+  // 返回 Promise<boolean>：true=同意/无需授权，false=拒绝
+  requirePrivacy() {
+    return new Promise((resolve) => {
+      if (typeof wx.requirePrivacyAuthorize !== 'function') {
+        resolve(true); return
+      }
+      try {
+        wx.requirePrivacyAuthorize({
+          success: () => resolve(true),
+          fail:    (e) => { warn('requirePrivacyAuthorize', e); resolve(false) },
+        })
+      } catch (e) { warn('requirePrivacyAuthorize', e); resolve(false) }
+    })
+  },
+}
+
+// ── 用户信息 ──────────────────────────────────────────────────
+export const userInfo = {
+  // 拉头像/昵称：先 getUserProfile（需用户手势），失败回退 getUserInfo
+  getProfile(desc, onSuccess, onFail) {
+    try {
+      wx.getUserProfile({
+        desc,
+        success: (res) => onSuccess && onSuccess(res.userInfo || {}),
+        fail:    (e)   => { warn('getUserProfile', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('getUserProfile', e); onFail && onFail(e) }
+  },
+  getBasic(onSuccess, onFail) {
+    try {
+      wx.getUserInfo({
+        success: (res) => onSuccess && onSuccess(res.userInfo || {}),
+        fail:    (e)   => { warn('getUserInfo', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('getUserInfo', e); onFail && onFail(e) }
+  },
+}
+
+// ── 云存储（开放数据域）─────────────────────────────────────
+export const cloud = {
+  setKV(kvList, onSuccess, onFail) {
+    try {
+      wx.setUserCloudStorage({
+        KVDataList: kvList,
+        success: () => onSuccess && onSuccess(),
+        fail:    (e) => { warn('setUserCloudStorage', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('setUserCloudStorage', e); onFail && onFail(e) }
+  },
+  getFriendKV(keyList, onSuccess, onFail) {
+    try {
+      wx.getFriendCloudStorage({
+        keyList,
+        success: (res) => onSuccess && onSuccess(res.data || []),
+        fail:    (e)   => { warn('getFriendCloudStorage', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('getFriendCloudStorage', e); onFail && onFail(e) }
+  },
+  getMyKV(keyList, onSuccess, onFail) {
+    try {
+      wx.getUserCloudStorage({
+        keyList,
+        success: (res) => onSuccess && onSuccess(res.KVDataList || []),
+        fail:    (e)   => { warn('getUserCloudStorage', e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('getUserCloudStorage', e); onFail && onFail(e) }
+  },
+}
+
+// ── 激励视频广告 ──────────────────────────────────────────────
+export const ad = {
+  // 返回 { show: () => Promise<boolean> }；boolean 表示用户是否看完
+  createRewarded(adUnitId) {
+    if (!adUnitId) return null
+    try {
+      const inst = wx.createRewardedVideoAd({ adUnitId })
+      return {
+        show() {
+          return new Promise((resolve) => {
+            const onClose = (res) => {
+              inst.offClose(onClose)
+              resolve(!!(res && res.isEnded))
+            }
+            inst.onClose(onClose)
+            inst.onError((e) => { warn('rewardedVideoAd.onError', e); resolve(false) })
+            inst.show().catch((e) => { warn('rewardedVideoAd.show', e); resolve(false) })
+          })
+        }
+      }
+    } catch (e) { warn('createRewardedVideoAd', e); return null }
+  },
+}
+```
+
+- [ ] **Step 2：语法 + 静态检查**
+
+```bash
+python -c "
+import re, subprocess, os, tempfile
+with open('src/utils/wxApi.js', encoding='utf-8') as f: src = f.read()
+s = re.sub(r'^export\s+', '', src, flags=re.M)
+tmp = os.path.join(tempfile.gettempdir(), 'check_wxapi.js')
+open(tmp, 'w', encoding='utf-8').write(s)
+r = subprocess.run(['node', '--check', tmp], capture_output=True, text=True)
+print('rc =', r.returncode, '|', r.stderr.strip() if r.stderr else 'OK')
+"
+```
+
+Expected：`rc = 0 | OK`
+
+- [ ] **Step 3：提交**
+
+```bash
+git add src/utils/wxApi.js
+git commit -m "feat(util): add unified wxApi wrapper with structured failure logging"
+```
+
+---
+
+### Task D4：迁移所有 wx 调用到 wxApi
+
+把 `storage.js` / `game.js` / `LeaderboardScene.js` / `GameScene.js` 中的散落 wx 调用全部替换为 wxApi 调用。`onTouchStart/Move/End`、`createCanvas`、`createImage`、`createWebAudioContext`、`getSystemInfoSync` 这些**保留原样**（属于底层 API，不在封装范围）。
+
+**Files:**
+- Modify: `src/utils/storage.js`（storage.get/set + share.send + share.getLaunchQuery + cloud.setKV/getMyKV + auth.requirePrivacy）
+- Modify: `src/scenes/LeaderboardScene.js`（cloud.getFriendKV + cloud.getMyKV + auth.requirePrivacy + userInfo.getProfile）
+- Modify: `src/scenes/GameScene.js`（ad.createRewarded + share.send）
+- Modify: `game.js`（auth.requirePrivacy + userInfo.getProfile）
+
+- [ ] **Step 1：迁移 storage.js**
+
+逐个改造（保持外部 export 签名不变）。例：
+
+```js
+// 旧
+function _saveLivesData(data) {
+  try { wx.setStorageSync(LIVES_KEY, data) } catch (e) {}
+}
+
+// 新
+import { storage } from './wxApi.js'
+// ...
+function _saveLivesData(data) {
+  storage.set(LIVES_KEY, data)
+}
+```
+
+类似改造所有 `try { wx.getStorageSync/setStorageSync(...) } catch` 块。
+
+`shareForLife` 改为调 `share.send(...)`。`handleShareEntry` 改为 `share.getLaunchQuery()`。`requestPrivacyAuthorize` 改为 `auth.requirePrivacy`（已有同名 wrapper，但内部实现替换）。`saveProgress` 用 `cloud.setKV(...)`。
+
+- [ ] **Step 2：迁移 game.js 的 `_initUserInfo`**
+
+替换 game.js 的 `_initUserInfo` 实现，使用 `auth.requirePrivacy()` 与 `userInfo.getBasic`。
+
+- [ ] **Step 3：迁移 LeaderboardScene.js 的 `_loadRank` 与 init**
+
+替换 `wx.getFriendCloudStorage` 调用为 `cloud.getFriendKV`，`wx.getUserCloudStorage` 为 `cloud.getMyKV`，`wx.requirePrivacyAuthorize` 与 `wx.getUserProfile` 用 `auth.requirePrivacy` + `userInfo.getProfile`。
+
+- [ ] **Step 4：迁移 GameScene.js 的广告与分享**
+
+替换 `_showRewardedAd` 中的 `wx.createRewardedVideoAd` 为 `ad.createRewarded(adId)`，返回 null 时跳分享。`_shareForProp` 改用 `share.send`。
+
+- [ ] **Step 5：跑 vitest 验证 GameLogic 未受影响**
+
+```bash
+npx vitest run
+```
+
+Expected：D2 添加的 20+ 用例全过（GameLogic 不依赖 wx，应不受 D4 影响；如失败说明 D4 改坏了别的）。
+
+- [ ] **Step 6：静态检查 wx 调用已收敛**
+
+```bash
+grep -rn "wx\.\(getStorageSync\|setStorageSync\|shareAppMessage\|requirePrivacyAuthorize\|getUserProfile\|getUserInfo\|getFriendCloudStorage\|setUserCloudStorage\|getUserCloudStorage\|createRewardedVideoAd\|getLaunchOptionsSync\)" src/ game.js
+```
+
+Expected：只有 `src/utils/wxApi.js` 一处匹配。
+
+- [ ] **Step 7：手动验证 5 个核心路径**
+
+按 spec 第 5 节，实机测试：
+- 开始页 / 第 1 关 / 第 10 关 / 排行榜 / 每日挑战 — 所有交互应与改造前完全一致，控制台无 `[wxApi]` warn（除非真的发生失败）
+
+- [ ] **Step 8：提交**
+
+```bash
+git add src/utils/storage.js src/scenes/LeaderboardScene.js src/scenes/GameScene.js game.js
+git commit -m "refactor: migrate all wx.* calls to wxApi wrapper"
+```
+
+---
+
 ## 完成定义
 
-- ✅ 所有 11 个 Task 提交到 master
-- ✅ `node --check` 全部通过
+- ✅ 所有 15 个 Task 提交到 master（11 原 + 4 新 Phase D）
+- ✅ `npm test` 通过，GameLogic 至少 20 个用例 0 failing
+- ✅ `node --check` 全部 JS 文件通过
 - ✅ 微信开发者工具实机预览：开始页 / 第 1/10 关 / 排行榜 / 每日挑战 / 成就墙 5 个核心路径无视觉/交互回归
 - ✅ `grep -rn "hexToRgb\|YOUR_AD_UNIT_ID"` 无残留
+- ✅ `wx.{storage,share,...}` 散落调用收敛到 `wxApi.js` 一处
 
 ## 风险与回滚
 
