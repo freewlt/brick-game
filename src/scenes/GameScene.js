@@ -8,46 +8,8 @@ import { addExtraProp, SHARE_CONFIG,
 } from '../utils/storage.js'
 import { CONFIG as _CFG } from '../config.js'  // 成就列表引用
 import AchievementUnlockPopup from './AchievementUnlockPopup.js'
-
-// 飘字动画
-class FloatText {
-  constructor(text, x, y, color = '#FFD700') {
-    this.text = text; this.x = x; this.y = y
-    this.color = color; this.alpha = 1; this.vy = -2; this.life = 60
-  }
-  update() { this.y += this.vy; this.vy *= 0.95; this.life--; this.alpha = this.life / 60 }
-  isDead()  { return this.life <= 0 }
-  draw(ctx) {
-    ctx.save()
-    ctx.globalAlpha = this.alpha
-    ctx.font = 'bold 20px sans-serif'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = this.color
-    ctx.fillText(this.text, this.x, this.y)
-    ctx.restore()
-  }
-}
-
-// 消除粒子
-class MatchParticle {
-  constructor(x, y, color) {
-    this.x = x; this.y = y; this.color = color
-    this.vx = (Math.random() - 0.5) * 8
-    this.vy = (Math.random() - 0.5) * 8 - 3
-    this.alpha = 1; this.r = 4 + Math.random() * 4; this.life = 40
-  }
-  update() {
-    this.x += this.vx; this.y += this.vy; this.vy += 0.3
-    this.life--; this.alpha = this.life / 40
-  }
-  isDead() { return this.life <= 0 }
-  draw(ctx) {
-    ctx.save(); ctx.globalAlpha = this.alpha
-    ctx.fillStyle = this.color
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fill()
-    ctx.restore()
-  }
-}
+import FloatText      from '../effects/FloatText.js'
+import MatchParticle  from '../effects/MatchParticle.js'
 
 // 辅助：将 '#RRGGBB' 转为 'R,G,B' 字符串（用于 rgba() 拼接）
 function hexToRgb(hex) {
