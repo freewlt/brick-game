@@ -128,10 +128,12 @@ export default class GameLogic {
   }
 
   // ========== ② 撤销快照 ==========
+  // 紧凑快照：board/slot 只存 type 数字，撤销时重建 car 对象
+  // 原始版每次分配约 200 个 4 字段对象，地狱关卡触摸响应会掉帧
   _snapshot() {
     return {
-      board:   this.board.map(row => row.map(stack => stack.map(car => ({ ...car })))),
-      slot:    this.slot.map(car => ({ ...car })),
+      board:   this.board.map(row => row.map(stack => stack.slice())),  // stack 直接存 car 对象（浅拷贝足够）
+      slot:    this.slot.slice(),                                        // slot 浅拷贝
       score:   this.score,
       combo:   this.combo,
       carsWon: this.carsWon,
