@@ -128,7 +128,8 @@ export default class GameLogic {
   }
 
   // ========== ② 撤销快照 ==========
-  // 紧凑快照：board/slot 只存 type 数字，撤销时重建 car 对象
+  // 浅拷贝快照：board/slot 保存 car 对象的引用（不再 clone 对象）
+  // car 在生命周期内不会被字段修改，只在 board/slot 之间移动，因此引用共享是安全的
   // 原始版每次分配约 200 个 4 字段对象，地狱关卡触摸响应会掉帧
   _snapshot() {
     return {
