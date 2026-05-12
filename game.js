@@ -7,7 +7,7 @@ import SettingsScene    from './src/scenes/SettingsScene.js'
 import AllClearScene    from './src/scenes/AllClearScene.js'
 import AchievementScene from './src/scenes/AchievementScene.js'
 import DailyScene       from './src/scenes/DailyScene.js'
-import { handleShareEntry, saveLevelProgress } from './src/utils/storage.js'
+import { handleShareEntry, saveLevelProgress, saveMyUserInfo } from './src/utils/storage.js'
 import AudioManager     from './src/utils/audio.js'
 
 const canvas = wx.createCanvas()
