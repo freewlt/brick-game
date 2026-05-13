@@ -400,7 +400,7 @@ export default class GameLogic {
   }
 
   getStackDepth(r, c) {
-    return (this.board[r] && this.board[r][c]) ? this.board[r][c].length : 0
+    return this.board[r][c].length
   }
 
   getRemainingCount() {
