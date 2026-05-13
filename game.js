@@ -8,6 +8,7 @@ import AllClearScene    from './src/scenes/AllClearScene.js'
 import AchievementScene from './src/scenes/AchievementScene.js'
 import DailyScene       from './src/scenes/DailyScene.js'
 import { handleShareEntry, saveLevelProgress, saveMyUserInfo } from './src/utils/storage.js'
+import { auth, userInfo } from './src/utils/wxApi.js'
 import AudioManager     from './src/utils/audio.js'
 
 const canvas = wx.createCanvas()
@@ -75,34 +76,19 @@ const Game = {
     this.bindEvents()
   },
 
-  // 隐私授权成功后立即拉取自己的头像和昵称并本地缓存
-  // 供排行榜场景识别"我"的条目时使用
   _initUserInfo() {
     const doFetch = () => {
-      wx.getUserInfo({
-        success(res) {
-          const info = res.userInfo || {}
-          if (info.nickName) {
-            saveMyUserInfo({
-              nickname:  info.nickName,
-              avatarUrl: info.avatarUrl || '',
-            })
-          }
-        },
-        fail() {},
+      userInfo.getBasic((info) => {
+        if (info.nickName) {
+          saveMyUserInfo({ nickname: info.nickName, avatarUrl: info.avatarUrl || '' })
+        }
       })
     }
 
-    if (typeof wx.requirePrivacyAuthorize === 'function') {
-      wx.requirePrivacyAuthorize({
-        success: () => { this._privacyOK = true; doFetch() },
-        fail:    () => { this._privacyOK = false },   // 用户拒绝，跳过
-      })
-    } else {
-      // 低版本基础库不支持隐私 API，直接拉取
-      this._privacyOK = true
-      doFetch()
-    }
+    auth.requirePrivacy().then((ok) => {
+      this._privacyOK = ok
+      if (ok) doFetch()
+    })
   },
 
   showStart() {

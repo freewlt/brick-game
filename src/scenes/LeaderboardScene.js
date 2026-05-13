@@ -1,7 +1,7 @@
 // 排行榜场景 - 赢了个赢（天蓝玻璃主题）
-// 主域直接调用 wx.getFriendCloudStorage + wx.getUserCloudStorage 取数，Canvas 自渲染列表
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { getLives, shareForLife, getMyUserInfo, getMyProgress, saveMyUserInfo } from '../utils/storage.js'
+import { auth, userInfo, cloud } from '../utils/wxApi.js'
 const e = stripVS
 
 const RANK_KEY = 'levelsPassed'
@@ -81,32 +81,19 @@ export default class LeaderboardScene {
     if (pri === true)  { this._loadRank(); return }
 
     // pri === null：启动时未问过（极端情况），现场补调一次
-    if (typeof wx.requirePrivacyAuthorize === 'function') {
-      wx.requirePrivacyAuthorize({
-        success: () => {
-          this.game._privacyOK = true
-          // 授权通过后先拉自己的头像/昵称并缓存，再加载排行榜
-          wx.getUserProfile({
-            desc: '用于好友排行榜显示',
-            success: (res) => {
-              const info = res.userInfo || {}
-              if (info.nickName) {
-                saveMyUserInfo({ nickname: info.nickName, avatarUrl: info.avatarUrl || '' })
-              }
-              this._loadRank()
-            },
-            fail: () => { this._loadRank() },  // 拉不到也继续
-          })
+    auth.requirePrivacy().then((ok) => {
+      this.game._privacyOK = ok
+      if (!ok) { this._denied = true; this.loading = false; return }
+      userInfo.getProfile('用于好友排行榜显示',
+        (info) => {
+          if (info.nickName) {
+            saveMyUserInfo({ nickname: info.nickName, avatarUrl: info.avatarUrl || '' })
+          }
+          this._loadRank()
         },
-        fail: () => {
-          this.game._privacyOK = false
-          this._denied = true
-          this.loading = false
-        },
-      })
-    } else {
-      this._loadRank()
-    }
+        () => { this._loadRank() }
+      )
+    })
   }
 
   // ── 取数：两个 API 并行 ──────────────────────────────────────────────
@@ -121,25 +108,19 @@ export default class LeaderboardScene {
       this._build(friendData || [], myKV)
     }
 
-    try {
-      wx.getFriendCloudStorage({
-        keyList: [RANK_KEY],
-        success: (res) => { friendData = res.data || []; tryBuild() },
-        fail:    ()    => { friendData = [];             tryBuild() },
-      })
-    } catch (_) { friendData = []; tryBuild() }
+    cloud.getFriendKV([RANK_KEY],
+      (data) => { friendData = data || []; tryBuild() },
+      ()     => { friendData = [];         tryBuild() }
+    )
 
-    try {
-      wx.getUserCloudStorage({
-        keyList: [RANK_KEY],
-        success: (res) => {
-          const kv = (res.KVDataList || []).find(k => k.key === RANK_KEY)
-          myKV = kv ? (parseInt(kv.value, 10) || 0) : 0
-          tryBuild()
-        },
-        fail: () => { myKV = null; tryBuild() },
-      })
-    } catch (_) { myKV = null; tryBuild() }
+    cloud.getMyKV([RANK_KEY],
+      (kvList) => {
+        const kv = (kvList || []).find(k => k.key === RANK_KEY)
+        myKV = kv ? (parseInt(kv.value, 10) || 0) : 0
+        tryBuild()
+      },
+      () => { myKV = null; tryBuild() }
+    )
   }
 
   // ── 构建列表 + 预加载头像 ────────────────────────────────────────────

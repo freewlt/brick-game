@@ -1,4 +1,5 @@
 // 存储工具 - 机会系统 + 排行榜 + 分享
+import { storage, share, cloud, auth } from './wxApi.js'
 
 // ==================== 机会系统 ====================
 const LIVES_KEY  = 'ywgy_lives'
@@ -6,15 +7,13 @@ const LIVES_MAX  = 3
 const RECOVER_MS = 30 * 60 * 1000  // 30分钟恢复1次
 
 function _loadLivesData() {
-  try {
-    const raw = wx.getStorageSync(LIVES_KEY)
-    if (raw && typeof raw === 'object') return raw
-  } catch (e) {}
+  const raw = storage.get(LIVES_KEY)
+  if (raw && typeof raw === 'object') return raw
   return { count: LIVES_MAX, lastRecover: Date.now(), lastSpend: 0 }
 }
 
 function _saveLivesData(data) {
-  try { wx.setStorageSync(LIVES_KEY, data) } catch (e) {}
+  storage.set(LIVES_KEY, data)
 }
 
 // 计算自动恢复后的机会数
@@ -78,18 +77,14 @@ const LEVEL_PROGRESS_KEY = 'ywgy_level_progress'
 
 // 读取已解锁的最高关卡索引（0-based）；首次返回 0
 function getLevelProgress() {
-  try {
-    const raw = wx.getStorageSync(LEVEL_PROGRESS_KEY)
-    if (typeof raw === 'number' && raw >= 0) return raw
-  } catch (e) {}
+  const raw = storage.get(LEVEL_PROGRESS_KEY)
+  if (typeof raw === 'number' && raw >= 0) return raw
   return 0
 }
 
 // 保存当前进入的关卡索引（直接覆盖，退出是哪关下次就从哪关开始）
 function saveLevelProgress(levelIdx) {
-  try {
-    wx.setStorageSync(LEVEL_PROGRESS_KEY, levelIdx)
-  } catch (e) {}
+  storage.set(LEVEL_PROGRESS_KEY, levelIdx)
 }
 
 // ==================== 排行榜 ====================
@@ -98,23 +93,14 @@ const MY_PROGRESS_KEY = 'ywgy_my_progress'
 
 // 上传通关数（通关时调用）并本地备份（排行榜显示自己用）
 function saveProgress(levelsPassed) {
-  try {
-    wx.setUserCloudStorage({
-      KVDataList: [{ key: RANK_KEY, value: String(levelsPassed) }],
-      success: () => {},
-      fail: () => {},
-    })
-  } catch (e) {}
-  // 本地存一份，供排行榜把自己插入列表
-  try { wx.setStorageSync(MY_PROGRESS_KEY, levelsPassed) } catch (e) {}
+  cloud.setKV([{ key: RANK_KEY, value: String(levelsPassed) }])
+  storage.set(MY_PROGRESS_KEY, levelsPassed)
 }
 
 // 读取本地缓存的自己通关数
 function getMyProgress() {
-  try {
-    const v = wx.getStorageSync(MY_PROGRESS_KEY)
-    return typeof v === 'number' ? v : 0
-  } catch (e) { return 0 }
+  const v = storage.get(MY_PROGRESS_KEY)
+  return typeof v === 'number' ? v : 0
 }
 
 // ==================== 我的用户信息缓存 ====================
@@ -122,41 +108,34 @@ const MY_USERINFO_KEY = 'ywgy_my_userinfo'
 
 // 保存自己的头像和昵称（game.js init 时调用）
 function saveMyUserInfo(info) {
-  try { wx.setStorageSync(MY_USERINFO_KEY, info) } catch (e) {}
+  storage.set(MY_USERINFO_KEY, info)
 }
 
 // 读取缓存的自己头像/昵称；无则返回默认值
 function getMyUserInfo() {
-  try {
-    const raw = wx.getStorageSync(MY_USERINFO_KEY)
-    if (raw && raw.nickname) return raw
-  } catch (e) {}
+  const raw = storage.get(MY_USERINFO_KEY)
+  if (raw && raw.nickname) return raw
   return { nickname: '我', avatarUrl: '' }
 }
 
 // 拉取好友排行数据，返回 Promise<Array<{nickname, avatarUrl, levelsPassed}>>
 function fetchFriendRank() {
   return new Promise((resolve) => {
-    try {
-      wx.getFriendCloudStorage({
-        keyList: [RANK_KEY],
-        success: (res) => {
-          const list = (res.data || []).map(item => {
-            const kv = (item.KVDataList || []).find(k => k.key === RANK_KEY)
-            return {
-              nickname:     item.nickname   || '好友',
-              avatarUrl:    item.avatarUrl  || '',
-              levelsPassed: parseInt(kv ? kv.value : '0', 10) || 0,
-            }
-          })
-          list.sort((a, b) => b.levelsPassed - a.levelsPassed)
-          resolve(list)
-        },
-        fail: () => resolve([]),
-      })
-    } catch (e) {
-      resolve([])
-    }
+    cloud.getFriendKV([RANK_KEY],
+      (data) => {
+        const list = (data || []).map(item => {
+          const kv = (item.KVDataList || []).find(k => k.key === RANK_KEY)
+          return {
+            nickname:     item.nickname   || '好友',
+            avatarUrl:    item.avatarUrl  || '',
+            levelsPassed: parseInt(kv ? kv.value : '0', 10) || 0,
+          }
+        })
+        list.sort((a, b) => b.levelsPassed - a.levelsPassed)
+        resolve(list)
+      },
+      () => resolve([])
+    )
   })
 }
 
@@ -172,30 +151,22 @@ const SHARE_CONFIG = {
 
 // 分享给好友并立即给自己+1机会（乐观更新）
 function shareForLife(cb) {
-  wx.shareAppMessage({
+  share.send({
     title:    SHARE_CONFIG.title,
     imageUrl: SHARE_CONFIG.imageUrl,
-    query: 'from=share',
-    success: () => {
-      const next = addLife(1)
-      if (cb) cb(next)
-    },
-    fail: () => {
-      if (cb) cb(null)
-    },
+    query:    'from=share',
+    onSuccess: () => { const next = addLife(1); if (cb) cb(next) },
+    onFail:    () => { if (cb) cb(null) },
   })
 }
 
 // 启动时检测分享入口（在 game.js 初始化时调用）
 function handleShareEntry() {
-  try {
-    const opts  = wx.getLaunchOptionsSync()
-    const query = opts.query || {}
-    if (query.from === 'share') {
-      addLife(1)
-      return true  // 返回 true 表示本次是好友分享进来的
-    }
-  } catch (e) {}
+  const query = share.getLaunchQuery()
+  if (query.from === 'share') {
+    addLife(1)
+    return true
+  }
   return false
 }
 
@@ -203,15 +174,13 @@ function handleShareEntry() {
 const PROPS_EXTRA_KEY = 'ywgy_props_extra'
 
 function _loadPropsExtra() {
-  try {
-    const raw = wx.getStorageSync(PROPS_EXTRA_KEY)
-    if (raw && typeof raw === 'object') return raw
-  } catch (e) {}
+  const raw = storage.get(PROPS_EXTRA_KEY)
+  if (raw && typeof raw === 'object') return raw
   return { expand: 0, shuffle: 0 }
 }
 
 function _savePropsExtra(data) {
-  try { wx.setStorageSync(PROPS_EXTRA_KEY, data) } catch (e) {}
+  storage.set(PROPS_EXTRA_KEY, data)
 }
 
 // 读取额外道具存量
@@ -255,36 +224,32 @@ function _defaultStats() {
 
 // 读取累计统计
 function getAchievementStats() {
-  try {
-    const raw = wx.getStorageSync(ACHIEVEMENT_STATS_KEY)
-    if (raw && typeof raw === 'object') {
-      return { ..._defaultStats(), ...raw }
-    }
-  } catch (e) {}
+  const raw = storage.get(ACHIEVEMENT_STATS_KEY)
+  if (raw && typeof raw === 'object') {
+    return { ..._defaultStats(), ...raw }
+  }
   return _defaultStats()
 }
 
 // 保存累计统计
 function saveAchievementStats(stats) {
-  try { wx.setStorageSync(ACHIEVEMENT_STATS_KEY, stats) } catch (e) {}
+  storage.set(ACHIEVEMENT_STATS_KEY, stats)
 }
 
 // 读取已解锁成就集合（返回 Set<string>）
 function getUnlockedAchievements() {
-  try {
-    const raw = wx.getStorageSync(ACHIEVEMENT_UNLOCK_KEY)
-    if (Array.isArray(raw)) return new Set(raw)
-  } catch (e) {}
+  const raw = storage.get(ACHIEVEMENT_UNLOCK_KEY)
+  if (Array.isArray(raw)) return new Set(raw)
   return new Set()
 }
 
 // 解锁一个成就（持久化）
 function unlockAchievement(id) {
   const set = getUnlockedAchievements()
-  if (set.has(id)) return false   // 已解锁，不重复
+  if (set.has(id)) return false
   set.add(id)
-  try { wx.setStorageSync(ACHIEVEMENT_UNLOCK_KEY, [...set]) } catch (e) {}
-  return true   // 返回 true 表示是新解锁
+  storage.set(ACHIEVEMENT_UNLOCK_KEY, [...set])
+  return true
 }
 
 // 批量检测并解锁成就；返回本次新解锁的成就数组（可能为空）
@@ -302,22 +267,8 @@ function checkAndUnlockAchievements(achievements, stats) {
 }
 
 // ==================== 隐私授权 ====================
-// 微信要求：访问用户头像/昵称（getFriendCloudStorage）前必须完成隐私协议授权。
-// 使用 wx.requirePrivacyAuthorize 发起授权；若平台版本不支持则静默跳过。
-//
-// 用法：await requestPrivacyAuthorize()  →  true=已授权/无需授权，false=用户拒绝
 function requestPrivacyAuthorize() {
-  return new Promise((resolve) => {
-    // 低版本基础库不支持该 API，直接放行
-    if (typeof wx.requirePrivacyAuthorize !== 'function') {
-      resolve(true)
-      return
-    }
-    wx.requirePrivacyAuthorize({
-      success: () => resolve(true),   // 用户同意 或 今日已同意过
-      fail:    () => resolve(false),  // 用户拒绝
-    })
-  })
+  return auth.requirePrivacy()
 }
 
 // ==================== 每日挑战 ====================
@@ -345,30 +296,26 @@ function _yesterdayStr() {
 // 读取每日挑战状态
 // 返回 { date, played, won, streak, dailyWins }
 function getDailyState() {
-  try {
-    const raw = wx.getStorageSync(DAILY_KEY)
-    if (raw && typeof raw === 'object') {
-      // 若存储日期不是今天，保留 streak/dailyWins，重置 played/won
-      if (raw.date !== _todayStr()) {
-        // 若上次玩的是昨天且赢了，streak 连续保留（completeDailyChallenge 才递增，这里不动）
-        return {
-          date:      _todayStr(),
-          played:    false,
-          won:       false,
-          streak:    raw.streak    || 0,
-          dailyWins: raw.dailyWins || 0,
-          lastWonDate: raw.won ? raw.date : (raw.lastWonDate || ''),
-        }
+  const raw = storage.get(DAILY_KEY)
+  if (raw && typeof raw === 'object') {
+    if (raw.date !== _todayStr()) {
+      return {
+        date:      _todayStr(),
+        played:    false,
+        won:       false,
+        streak:    raw.streak    || 0,
+        dailyWins: raw.dailyWins || 0,
+        lastWonDate: raw.won ? raw.date : (raw.lastWonDate || ''),
       }
-      return { streak: 0, dailyWins: 0, lastWonDate: '', ...raw }
     }
-  } catch (e) {}
+    return { streak: 0, dailyWins: 0, lastWonDate: '', ...raw }
+  }
   return { date: _todayStr(), played: false, won: false, streak: 0, dailyWins: 0, lastWonDate: '' }
 }
 
 // 保存每日挑战状态
 function saveDailyState(state) {
-  try { wx.setStorageSync(DAILY_KEY, state) } catch (e) {}
+  storage.set(DAILY_KEY, state)
 }
 
 // 每日挑战结束时调用（won: 是否通关）
