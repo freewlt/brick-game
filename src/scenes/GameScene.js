@@ -218,12 +218,15 @@ export default class GameScene {
     ctx.save()
     ctx.translate(shakeX, shakeY)
 
-    // ── 背景：天蓝渐变（亮色主题）──
-    const bg = ctx.createLinearGradient(0, 0, 0, height)
-    bg.addColorStop(0,   '#5BC8F5')
-    bg.addColorStop(0.5, '#84D9FF')
-    bg.addColorStop(1,   '#B8EEFF')
-    ctx.fillStyle = bg
+    // ── 背景：天蓝渐变（缓存，每帧复用）──
+    if (!this._bgGrad) {
+      const bg = ctx.createLinearGradient(0, 0, 0, height)
+      bg.addColorStop(0,   '#5BC8F5')
+      bg.addColorStop(0.5, '#84D9FF')
+      bg.addColorStop(1,   '#B8EEFF')
+      this._bgGrad = bg
+    }
+    ctx.fillStyle = this._bgGrad
     ctx.fillRect(0, 0, width, height)
 
     this._drawHeader(ctx, width, logic)
