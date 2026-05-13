@@ -11,13 +11,6 @@ import AchievementUnlockPopup from './AchievementUnlockPopup.js'
 import FloatText      from '../effects/FloatText.js'
 import MatchParticle  from '../effects/MatchParticle.js'
 
-// 辅助：将 '#RRGGBB' 转为 'R,G,B' 字符串（用于 rgba() 拼接）
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `${r},${g},${b}`
-}
 
 export default class GameScene {
   // customCfg: 每日挑战专用关卡参数，传入时不走 CONFIG.LEVELS
@@ -1270,13 +1263,13 @@ export default class GameScene {
 
       // 小圆角底板（亮色：浅白或淡彩）
       ctx.fillStyle = inSlot > 0
-        ? `rgba(${hexToRgb(CONFIG.COLORS[type])},0.22)`
+        ? `rgba(${CONFIG.COLORS_RGB[type]},0.22)`
         : 'rgba(255,255,255,0.40)'
       roundRect(ctx, x, y, sz, sz, 6); ctx.fill()
 
       // 有车时轻描边
       if (inSlot > 0) {
-        ctx.strokeStyle = `rgba(${hexToRgb(CONFIG.COLORS[type])},0.55)`
+        ctx.strokeStyle = `rgba(${CONFIG.COLORS_RGB[type]},0.55)`
         ctx.lineWidth   = 1
         roundRect(ctx, x, y, sz, sz, 6); ctx.stroke()
       }
