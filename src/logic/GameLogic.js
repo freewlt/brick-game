@@ -29,6 +29,9 @@ export default class GameLogic {
     this.expandLeft    = 0
     this.shuffleLeft   = 0
     this.slotMax       = CONFIG.SLOT_MAX   // 当前有效槽位上限（扩槽后变7）
+    // ⑤ 每列「最高有车的行号」缓存：-1 表示该列全空
+    // isBlocked 查这个就 O(1)；棋盘整体变动后调 _recomputeColTops 重算
+    this._colTopRow    = new Array(CONFIG.BOARD_COLS).fill(-1)
   }
 
   // ========== 关卡初始化 ==========
@@ -98,6 +101,7 @@ export default class GameLogic {
         pidx = (pidx + 1) % positions.length
       }
     }
+    this._recomputeColTops()
   }
 
   _makeCar(type) {
@@ -118,13 +122,23 @@ export default class GameLogic {
   }
 
   // ========== ① 遮挡系统 ==========
-  // 同列上方任意一行有车 → 本格被遮挡，不可点击
+  // 同列上方任意一行有车 → 本格被遮挡。用 _colTopRow 缓存查询 O(1)
   isBlocked(r, c) {
-    if (r === 0) return false
-    for (let row = 0; row < r; row++) {
-      if (this.board[row][c].length > 0) return true
+    const top = this._colTopRow[c]
+    return top !== -1 && top < r
+  }
+
+  // 整体变动 board 后调用（initLevel/useShuffle/undo）：重算所有列的最高有车行
+  _recomputeColTops() {
+    const rows = CONFIG.BOARD_ROWS
+    const cols = CONFIG.BOARD_COLS
+    for (let c = 0; c < cols; c++) {
+      let top = -1
+      for (let r = 0; r < rows; r++) {
+        if (this.board[r][c].length > 0) { top = r; break }
+      }
+      this._colTopRow[c] = top
     }
-    return false
   }
 
   // ========== ② 撤销快照 ==========
@@ -155,6 +169,7 @@ export default class GameLogic {
     this.win        = false
     this.undoLeft--
     this.lastInsertIdx = -1
+    this._recomputeColTops()
     return true
   }
 
@@ -236,6 +251,7 @@ export default class GameLogic {
 
     this.shuffleLeft--
     this.lastInsertIdx = -1
+    this._recomputeColTops()
     return 'ok'
   }
 
@@ -253,6 +269,14 @@ export default class GameLogic {
 
     const car = stack[stack.length - 1]
     stack.pop()
+    // 增量更新本列最高行号：若刚被点光了，本列 top 下移到下一个有车行
+    if (stack.length === 0 && this._colTopRow[c] === r) {
+      let newTop = -1
+      for (let rr = r + 1; rr < CONFIG.BOARD_ROWS; rr++) {
+        if (this.board[rr][c].length > 0) { newTop = rr; break }
+      }
+      this._colTopRow[c] = newTop
+    }
     // ③ 同色靠拢插入
     this._insertToSlot({ ...car })
     this.moves++

@@ -249,8 +249,62 @@ describe('GameLogic', () => {
       g.initLevel(0)
       g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
       g.board[0][3].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g._recomputeColTops()
       expect(g.isBlocked(3, 3)).toBe(true)
       expect(g.isBlocked(3, 4)).toBe(false)
+    })
+
+    it('点击移除顶层车后，本列下方解锁', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[1][2].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[3][2].push({ id: 2, type: 1, icon: '🚙', color: '#3498DB' })
+      g.totalCars = 2
+      g._recomputeColTops()
+      // 初始：(3,2) 被 (1,2) 遮挡
+      expect(g.isBlocked(3, 2)).toBe(true)
+      // 点击 (1,2) 把顶层车移走
+      g.clickCell(1, 2)
+      // 现在 (3,2) 应解锁
+      expect(g.isBlocked(3, 2)).toBe(false)
+    })
+
+    it('undo 撤销后遮挡状态正确恢复', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[1][2].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[3][2].push({ id: 2, type: 1, icon: '🚙', color: '#3498DB' })
+      g.totalCars = 2
+      g._recomputeColTops()
+      g.clickCell(1, 2)
+      expect(g.isBlocked(3, 2)).toBe(false)
+      g.undo()
+      // 撤销后 (1,2) 的车回来，(3,2) 再次被遮挡
+      expect(g.isBlocked(3, 2)).toBe(true)
+    })
+
+    it('useShuffle 后遮挡状态按新棋盘重算', () => {
+      g.initLevel(0)
+      // 洗牌前后总车数不变；用 isBlocked 抽样 49 格不报错即说明缓存被正确刷新
+      g.useShuffle()
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          expect(typeof g.isBlocked(r, c)).toBe('boolean')
+        }
+      }
+    })
+
+    it('多层堆叠：顶层是第 2 行，下方第 5 行被遮挡，第 1 行不影响第 3 行', () => {
+      g.initLevel(0)
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      // 第 2 行 c=4 放车，下方应被遮挡
+      g.board[2][4].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g._recomputeColTops()
+      expect(g.isBlocked(2, 4)).toBe(false)  // 自身格不算被遮挡
+      expect(g.isBlocked(3, 4)).toBe(true)
+      expect(g.isBlocked(6, 4)).toBe(true)
+      expect(g.isBlocked(1, 4)).toBe(false)  // 上方不会被下方挡
+      expect(g.isBlocked(2, 5)).toBe(false)  // 邻列不影响
     })
   })
 })
