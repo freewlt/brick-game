@@ -71,9 +71,16 @@ export default class LeaderboardScene {
     // 本次会话已拒绝 → 直接显示提示页，不再调隐私 API
     if (this._denied) return
 
+    // 优先复用启动时已记录的授权状态，避免重复弹隐私窗口
+    const pri = this.game._privacyOK
+    if (pri === false) { this._denied = true; this.loading = false; return }
+    if (pri === true)  { this._loadRank(); return }
+
+    // pri === null：启动时未问过（极端情况），现场补调一次
     if (typeof wx.requirePrivacyAuthorize === 'function') {
       wx.requirePrivacyAuthorize({
         success: () => {
+          this.game._privacyOK = true
           // 授权通过后先拉自己的头像/昵称并缓存，再加载排行榜
           wx.getUserProfile({
             desc: '用于好友排行榜显示',
@@ -87,7 +94,11 @@ export default class LeaderboardScene {
             fail: () => { this._loadRank() },  // 拉不到也继续
           })
         },
-        fail: () => { this._denied = true; this.loading = false },
+        fail: () => {
+          this.game._privacyOK = false
+          this._denied = true
+          this.loading = false
+        },
       })
     } else {
       this._loadRank()

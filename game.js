@@ -53,6 +53,9 @@ const Game = {
   _loopStarted: false,
   // 好友助力提示（入场时短暂显示）
   _shareToast: null,
+  // 隐私授权状态：true=已授权 / false=用户拒绝 / null=未询问过
+  // 让 LeaderboardScene 复用此状态，避免重复弹授权窗口
+  _privacyOK:  null,
 
   init() {
     // 初始化音效系统（创建 WebAudioContext）
@@ -92,11 +95,12 @@ const Game = {
 
     if (typeof wx.requirePrivacyAuthorize === 'function') {
       wx.requirePrivacyAuthorize({
-        success: () => doFetch(),
-        fail:    () => {},   // 用户拒绝，跳过
+        success: () => { this._privacyOK = true; doFetch() },
+        fail:    () => { this._privacyOK = false },   // 用户拒绝，跳过
       })
     } else {
       // 低版本基础库不支持隐私 API，直接拉取
+      this._privacyOK = true
       doFetch()
     }
   },
