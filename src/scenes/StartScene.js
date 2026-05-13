@@ -23,17 +23,27 @@ export default class StartScene {
     this._livesPopup     = false
     this._popupShareBtn  = null
     this._popupCloseBtn  = null
+    // lives 缓存：每帧调 getLives() 会触发 wx.getStorageSync，节流到 1Hz
+    this._cachedLives    = 3
+    this._livesRefreshAt = 0
   }
 
   init() {
-    this._livesPopup  = false
-    this._initClouds  = false
+    this._livesPopup     = false
+    this._initClouds     = false
+    this._livesRefreshAt = 0   // 强制刷新一次
   }
 
   update() {
     this.frame++
     this.logoAlpha = Math.min(1, this.logoAlpha + 0.025)
     this.btnScale  = 1 + Math.sin(this.frame * 0.055) * 0.028
+
+    // 每 60 帧（约 1s）刷新一次 lives 缓存
+    if (this.frame >= this._livesRefreshAt) {
+      this._cachedLives    = getLives()
+      this._livesRefreshAt = this.frame + 60
+    }
 
     // 初始化云朵位置
     const W = this.game.width
@@ -266,8 +276,8 @@ export default class StartScene {
       e('🏆'), '排行', '#8B6400')
     this.rankBtnRect = { x: tool1X, y: toolY, w: toolW, h: toolH }
 
-    // 机会按钮（带爱心）
-    const lives = getLives()
+    // 机会按钮（带爱心）— 走 1Hz 缓存避免每帧读 storage
+    const lives = this._cachedLives
     this._drawLivesToolBtn(ctx, tool2X, toolY, toolW, toolH, lives)
     this.livesBtnRect = { x: tool2X, y: toolY, w: toolW, h: toolH }
 

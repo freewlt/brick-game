@@ -59,14 +59,18 @@ export default class LeaderboardScene {
     this._lastY       = null
     this._velY        = 0
     this._dragging    = false
+    // lives 缓存：避免每帧 getLives() 触发 wx.getStorageSync
+    this._cachedLives    = 3
+    this._livesRefreshAt = 0
   }
 
   init() {
-    this.loading   = true
-    this._rankList = []
-    this.scrollY   = 0
-    this._velY     = 0
-    this.frame     = 0
+    this.loading        = true
+    this._rankList      = []
+    this.scrollY        = 0
+    this._velY          = 0
+    this.frame          = 0
+    this._livesRefreshAt = 0   // 强制刷新一次
 
     // 本次会话已拒绝 → 直接显示提示页，不再调隐私 API
     if (this._denied) return
@@ -192,6 +196,12 @@ export default class LeaderboardScene {
     this.frame++
     if (this.frame % 18 === 0) this._loadDots = (this._loadDots + 1) % 4
 
+    // 每 60 帧（约 1s）刷新一次 lives 缓存
+    if (this.frame >= this._livesRefreshAt) {
+      this._cachedLives    = getLives()
+      this._livesRefreshAt = this.frame + 60
+    }
+
     if (!this._dragging) {
       this.scrollY += this._velY
       this._velY   *= 0.88
@@ -253,8 +263,8 @@ export default class LeaderboardScene {
     ctx.fillText(e('🏆 好友排行'), W / 2, capCenterY)
     ctx.restore()
 
-    // 右侧机会❤
-    const lives = getLives()
+    // 右侧机会❤ — 走 1Hz 缓存避免每帧读 storage
+    const lives = this._cachedLives
     ctx.save()
     ctx.font = '14px sans-serif'
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
