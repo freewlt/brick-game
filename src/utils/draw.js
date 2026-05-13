@@ -27,6 +27,19 @@ export function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
 }
 
+// 带缓存的 measureText：同 font+text 的二次调用直接返回缓存宽度，避免热路径反复测量
+// cache 由调用方持有（通常是场景实例字段），便于按场景生命周期复位
+export function measureCached(ctx, font, text, cache) {
+  const key = `${font}|${text}`
+  if (cache.has(key)) return cache.get(key)
+  ctx.save()
+  ctx.font = font
+  const w = ctx.measureText(text).width
+  ctx.restore()
+  cache.set(key, w)
+  return w
+}
+
 // 绘制带阴影的圆角矩形
 export function drawCard(ctx, x, y, w, h, r, fillColor, shadowColor = 'rgba(0,0,0,0.15)') {
   ctx.save()

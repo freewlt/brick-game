@@ -1,7 +1,7 @@
 // 游戏主场景 - 赢了个赢（关卡制）
 import GameLogic from '../logic/GameLogic.js'
 import { CONFIG } from '../config.js'
-import { roundRect } from '../utils/draw.js'
+import { roundRect, measureCached } from '../utils/draw.js'
 import AudioManager from '../utils/audio.js'
 import { addExtraProp, SHARE_CONFIG,
   getAchievementStats, saveAchievementStats, checkAndUnlockAchievements,
@@ -46,6 +46,8 @@ export default class GameScene {
     this._sessionShares    = 0   // 本关分享次数
     this._achChecked       = false  // 胜利时只检测一次
     this._achPopup         = new AchievementUnlockPopup()
+    // Header 文字宽度缓存（关卡内文字固定，避免每帧 measureText）
+    this._textWidthCache   = new Map()
   }
 
   init() {
@@ -305,10 +307,7 @@ export default class GameScene {
     const stars = logic.win || logic.gameOver
       ? (logic.calcStars ? logic.calcStars() : 0)
       : (logic.calcCurrentStars ? logic.calcCurrentStars() : 0)
-    const titleW = (() => {
-      ctx.save(); ctx.font = 'bold 28px sans-serif'
-      const w = ctx.measureText(`第${levelNum}关`).width; ctx.restore(); return w
-    })()
+    const titleW = measureCached(ctx, 'bold 28px sans-serif', `第${levelNum}关`, this._textWidthCache)
     // 「目标」小字起点
     const starAreaX = padX + titleW + 12
 
@@ -326,10 +325,7 @@ export default class GameScene {
     const starGlows      = ['rgba(255,240,0,0.90)', 'rgba(255,200,0,0.90)', 'rgba(255,140,0,0.90)']
     const starGlowsDim   = ['rgba(180,150,0,0.20)', 'rgba(150,120,0,0.20)', 'rgba(120,90,0,0.20)']  // 暗淡发光
     ctx.font = 'bold 20px sans-serif'
-    const targetLabelW = (() => {
-      ctx.save(); ctx.font = 'bold 13px sans-serif'
-      const w = ctx.measureText('目标').width; ctx.restore(); return w
-    })()
+    const targetLabelW = measureCached(ctx, 'bold 13px sans-serif', '目标', this._textWidthCache)
     for (let s = 0; s < 3; s++) {
       if (s < stars) {
         ctx.fillStyle   = starColors[s]
