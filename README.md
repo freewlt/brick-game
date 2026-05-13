@@ -102,9 +102,12 @@ brick-game/
 ├── project.config.json       # 开发者工具项目配置
 ├── sitemap.json
 └── src/
-    ├── config.js             # 全局常量（棋盘尺寸、30关配置、颜色主题）
+    ├── config.js             # 全局常量（棋盘尺寸、30关配置、颜色主题、广告配置）
     ├── logic/
     │   └── GameLogic.js      # 核心逻辑（棋盘、遮挡、消除、撤销、星级）
+    ├── effects/
+    │   ├── FloatText.js      # 飘字动画（得分提示、连消、撤销反馈）
+    │   └── MatchParticle.js  # 消除粒子（消除时四散飞溅的彩色小球）
     ├── scenes/
     │   ├── StartScene.js     # 开始页（Logo 动画、机会展示、底部工具栏）
     │   ├── GameScene.js      # 游戏主场景（棋盘渲染、触摸交互、道具系统、成就追踪）
@@ -116,6 +119,7 @@ brick-game/
     └── utils/
         ├── draw.js           # roundRect 等绘图工具
         ├── storage.js        # 机会系统、排行榜、分享逻辑、成就持久化
+        ├── wxApi.js          # 微信 API 统一封装层（storage / share / auth / cloud / ad）
         └── audio.js          # 音效系统（WebAudio 合成，含 BGM、消除、连消等）
 ```
 
@@ -128,7 +132,8 @@ brick-game/
 - **动态安全区**：`safeTop` 通过 `wx.getWindowInfo().statusBarHeight + 44` 动态计算，适配刘海屏、安卓各机型，不再硬编码 88px
 - **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene 七个场景类，通过 `Game.currentScene` 切换
 - **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等，音效开关状态持久化
-- **社交**：`wx.setUserCloudStorage` 存储通关进度，`wx.getFriendCloudStorage` 获取好友数据
+- **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
+- **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
 ---
 
@@ -146,11 +151,24 @@ brick-game/
 | 位置 | 说明 |
 |------|------|
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
-| `src/scenes/GameScene.js` → `_showRewardedAd()` | 替换 `'YOUR_AD_UNIT_ID'` 为真实微信流量主广告单元 ID |
+| `src/config.js` → `AD_CONFIG.rewardedUnitId` | 填入微信流量主激励视频广告单元 ID；留空时自动降级为分享获取道具 |
 
 ---
 
 ## 更新日志
+
+### v1.4.0（2026-05-13）
+- **性能** 撤销快照改用浅拷贝，地狱关卡每次点击减少约 200 个对象分配
+- **性能** `isBlocked` 改为 O(1) 每列顶行缓存，消除每帧全棋盘扫描
+- **性能** `getLives()` 节流到 1Hz，避免每帧触发 `getStorageSync`
+- **性能** 棋盘车型集合缓存到关卡级别，去掉每帧 board 扫描
+- **性能** 背景渐变、`measureText` 结果在 `init()` 预建，不再每帧重算
+- **性能** `COLORS_RGB` 预计算到 `CONFIG`，热路径不再调用 `hexToRgb`
+- **重构** `FloatText` / `MatchParticle` 拆分到 `src/effects/` 目录
+- **重构** 所有 `wx.*` API 调用集中到 `src/utils/wxApi.js` 封装层，统一错误处理与失败日志
+- **重构** 广告单元 ID 移至 `CONFIG.AD_CONFIG.rewardedUnitId`，留空自动降级为分享
+- **修复** 隐私授权状态通过 `Game._privacyOK` 共享，排行榜不再重复弹授权窗口
+- **基础设施** 引入 vitest 单测框架，GameLogic 核心逻辑覆盖 29 个测试用例
 
 ### v1.3.2（2026-04-27）
 - **修复** 好友排行榜自身头像/昵称始终显示默认值的问题
@@ -201,6 +219,8 @@ brick-game/
 - [x] 成就系统
 - [x] 每日挑战模式
 - [x] 全场景天蓝玻璃 UI 统一
+- [x] 代码性能优化（热路径内存分配、重复扫描、wx API 封装）
+- [x] vitest 单测基础设施
 - [ ] 真实广告接入（需微信流量主资质，UV ≥ 1000）
 - [ ] 新关卡持续更新
 
