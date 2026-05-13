@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { CONFIG } from '../src/config.js'
 
+describe('CONFIG.AD_CONFIG', () => {
+  it('AD_CONFIG 存在且含 rewardedUnitId 字段', () => {
+    expect(CONFIG.AD_CONFIG).toBeDefined()
+    expect(typeof CONFIG.AD_CONFIG.rewardedUnitId).toBe('string')
+  })
+
+  it('rewardedUnitId 默认为空字符串（未配置广告位）', () => {
+    expect(CONFIG.AD_CONFIG.rewardedUnitId).toBe('')
+  })
+})
+
 describe('CONFIG.COLORS_RGB', () => {
   it('数组长度与 COLORS 一致', () => {
     expect(CONFIG.COLORS_RGB).toBeDefined()

@@ -10,6 +10,7 @@ import { CONFIG as _CFG } from '../config.js'  // 成就列表引用
 import AchievementUnlockPopup from './AchievementUnlockPopup.js'
 import FloatText      from '../effects/FloatText.js'
 import MatchParticle  from '../effects/MatchParticle.js'
+import { share, ad } from '../utils/wxApi.js'
 
 
 export default class GameScene {
@@ -1123,33 +1124,32 @@ export default class GameScene {
 
   // ─── 看激励视频广告 ───
   _showRewardedAd(propType) {
-    try {
-      const ad = wx.createRewardedVideoAd({ adUnitId: 'YOUR_AD_UNIT_ID' })
-      ad.onError(() => this._shareForProp(propType))
-      ad.onClose((res) => {
-        if (res && res.isEnded) {
-          this._grantProp(propType, '广告')
-        } else {
-          this.floatTexts.push(new FloatText('请完整观看~', this.game.width / 2, this.game.height / 2, '#FF9800'))
-        }
-      })
-      ad.show().catch(() => this._shareForProp(propType))
-    } catch (e) {
+    const adId = CONFIG.AD_CONFIG && CONFIG.AD_CONFIG.rewardedUnitId
+    const inst = ad.createRewarded(adId)
+    if (!inst) {
       this._shareForProp(propType)
+      return
     }
+    inst.show().then((watched) => {
+      if (watched) {
+        this._grantProp(propType, '广告')
+      } else {
+        this.floatTexts.push(new FloatText('请完整观看~', this.game.width / 2, this.game.height / 2, '#FF9800'))
+      }
+    })
   }
 
   // ─── 分享获取道具 ───
   _shareForProp(propType) {
-    wx.shareAppMessage({
+    share.send({
       title:    '我在「赢了个赢」里三消赢豪车！来挑战我！',
       imageUrl: SHARE_CONFIG.imageUrl,
-      query: `from=share&prop=${propType}`,
-      success: () => {
-        this._sessionShares++   // 成就计数
+      query:    `from=share&prop=${propType}`,
+      onSuccess: () => {
+        this._sessionShares++
         this._grantProp(propType, '分享')
       },
-      fail: () => this.floatTexts.push(new FloatText('分享取消', this.game.width / 2, this.game.height / 2, '#888')),
+      onFail: () => this.floatTexts.push(new FloatText('分享取消', this.game.width / 2, this.game.height / 2, '#888')),
     })
   }
 
