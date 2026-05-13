@@ -52,6 +52,9 @@ export default class GameScene {
 
   init() {
     this.logic.initLevel(this.startLevel, this._customCfg)
+    // 本关车型集合（关卡内不变），用于已收集进度小条；避免每帧扫描 board 构 Set
+    const cfg = this._customCfg || CONFIG.LEVELS[Math.min(this.startLevel, CONFIG.LEVELS.length - 1)]
+    this._levelTypes = Array.from({ length: cfg.carTypes }, (_, i) => i)
     this.lastCarsWon  = 0
     this.lastSlotLen  = 0
     this._resultScheduled = false
@@ -1238,16 +1241,9 @@ export default class GameScene {
       slotCount[car.type] = (slotCount[car.type] || 0) + 1
     }
 
-    const boardTypes = new Set()
-    for (const row of logic.board) {
-      for (const stack of row) {
-        for (const car of stack) boardTypes.add(car.type)
-      }
-    }
-    for (const car of logic.slot) boardTypes.add(car.type)
-
-    const types = [...boardTypes].sort()
-    if (types.length === 0) return
+    // 关卡车型集合在 init 中已计算（_levelTypes），不再每帧扫描 board
+    const types = this._levelTypes
+    if (!types || types.length === 0) return
 
     const itemW   = Math.min(46, (width - 24) / types.length)
     const totalW  = itemW * types.length
