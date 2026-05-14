@@ -1,6 +1,6 @@
 // 结算场景 - 赢了个赢（天蓝玻璃主题）
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
-import { spendLife, getLives, getRecoverSecondsLeft, shareForLife, saveProgress } from '../utils/storage.js'
+import { spendLife, getLives, getRecoverSecondsLeft, shareForLife, saveProgress, saveLevelProgress } from '../utils/storage.js'
 import { CONFIG } from '../config.js'
 
 const e = stripVS
@@ -59,6 +59,8 @@ export default class ResultScene {
       if (!isDaily) {
         // 普通模式：上传排行榜数据（已通关数 = levelIdx + 1）
         saveProgress(this.levelIdx + 1)
+        // 推进关卡进度，下次从首页进入直接进下一关
+        saveLevelProgress(Math.min(this.levelIdx + 1, CONFIG.LEVELS.length - 1))
       }
       this.lives = getLives()
       // 最后一关通关：1.2秒后自动跳到全通关彩蛋页（每日模式不触发）
