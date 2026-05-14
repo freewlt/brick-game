@@ -50,6 +50,47 @@ describe('CONFIG.COLORS_RGB', () => {
   })
 })
 
+import GameLogic from '../src/logic/GameLogic.js'
+
+describe('GameLogic seeded board', () => {
+  it('same seed produces identical board layout', () => {
+    const cfg = { carTypes: 5, layerMax: 3, setCount: 3, maxMoves: 60 }
+
+    const a = new GameLogic()
+    a.initLevel(0, cfg, '20260514')
+
+    const b = new GameLogic()
+    b.initLevel(0, cfg, '20260514')
+
+    const serialize = (logic) =>
+      logic.board.map(row => row.map(stack => stack.map(c => c.type).join(','))).join('|')
+
+    expect(serialize(a)).toBe(serialize(b))
+  })
+
+  it('different seeds produce different boards (with overwhelming probability)', () => {
+    const cfg = { carTypes: 5, layerMax: 3, setCount: 3, maxMoves: 60 }
+
+    const a = new GameLogic()
+    a.initLevel(0, cfg, '20260514')
+
+    const b = new GameLogic()
+    b.initLevel(0, cfg, '20260515')
+
+    const serialize = (logic) =>
+      logic.board.map(row => row.map(stack => stack.map(c => c.type).join(','))).join('|')
+
+    expect(serialize(a)).not.toBe(serialize(b))
+  })
+
+  it('no seed still works (random board)', () => {
+    const cfg = { carTypes: 4, layerMax: 2, setCount: 3, maxMoves: 40 }
+    const logic = new GameLogic()
+    expect(() => logic.initLevel(0, cfg)).not.toThrow()
+    expect(logic.totalCars).toBe(4 * 3 * 3)
+  })
+})
+
 describe('ResultScene level routing logic', () => {
   it('winning retry should replay current level, not level 0', () => {
     function getRetryLevel(levelIdx) {

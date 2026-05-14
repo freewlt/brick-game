@@ -36,7 +36,7 @@ export default class GameLogic {
 
   // ========== 关卡初始化 ==========
   // customCfg: 可选，传入时跳过 CONFIG.LEVELS 查表（每日挑战专用）
-  initLevel(levelIdx, customCfg = null) {
+  initLevel(levelIdx, customCfg = null, seed = null) {
     this.reset()
     this.level = levelIdx
     const cfg = customCfg || CONFIG.LEVELS[Math.min(levelIdx, CONFIG.LEVELS.length - 1)]
@@ -51,12 +51,15 @@ export default class GameLogic {
     if (extra.expand  > 0) spendExtraProp('expand',  extra.expand)
     if (extra.shuffle > 0) spendExtraProp('shuffle', extra.shuffle)
 
-    this._buildBoard(cfg)
+    this._buildBoard(cfg, seed)
   }
 
-  _buildBoard(cfg) {
+  _buildBoard(cfg, seed = null) {
     const cols = CONFIG.BOARD_COLS
     const rows = CONFIG.BOARD_ROWS
+    const shuffle = seed
+      ? (arr, tag) => this._seededShuffle(arr, this._makeRng(seed + tag))
+      : (arr)      => this._shuffle(arr)
 
     this.board = []
     for (let r = 0; r < rows; r++) {
@@ -75,13 +78,13 @@ export default class GameLogic {
       }
     }
     this.totalCars = types.length
-    this._shuffle(types)
+    shuffle(types, 'types')
 
     const positions = []
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) positions.push({ r, c })
     }
-    this._shuffle(positions)
+    shuffle(positions, 'positions')
 
     let pidx = 0
     for (const t of types) {
@@ -119,6 +122,23 @@ export default class GameLogic {
       [arr[i], arr[j]] = [arr[j], arr[i]]
     }
     return arr
+  }
+
+  _seededShuffle(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }
+
+  _makeRng(seed) {
+    let s = 0
+    for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0
+    return function () {
+      s = (s * 1664525 + 1013904223) >>> 0
+      return s / 0xFFFFFFFF
+    }
   }
 
   // ========== ① 遮挡系统 ==========
