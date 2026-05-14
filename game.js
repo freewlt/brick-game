@@ -102,7 +102,7 @@ const Game = {
 
   showGame(levelIdx = 0) {
     saveLevelProgress(levelIdx)   // 记录本次进入的关卡，退出即恢复
-    this.currentScene = new GameScene(this, levelIdx)
+    this.currentScene = new GameScene(this, levelIdx, null, null, `level_${levelIdx}`)
     this.currentScene.init()
   },
 
