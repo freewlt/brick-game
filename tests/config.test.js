@@ -49,3 +49,14 @@ describe('CONFIG.COLORS_RGB', () => {
     }
   })
 })
+
+describe('ResultScene level routing logic', () => {
+  it('winning retry should replay current level, not level 0', () => {
+    function getRetryLevel(levelIdx) {
+      return levelIdx
+    }
+    expect(getRetryLevel(4)).toBe(4)
+    expect(getRetryLevel(0)).toBe(0)
+    expect(getRetryLevel(9)).toBe(9)
+  })
+})

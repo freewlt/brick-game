@@ -418,8 +418,7 @@ export default class ResultScene {
       if (isDaily) {
         this._onClose()   // 每日模式重玩也只回 DailyScene（已played，不能再进）
       } else {
-        const lvl = this.isWin ? 0 : this.levelIdx
-        this.game.showGame(lvl)
+        this.game.showGame(this.levelIdx)
       }
       return
     }
