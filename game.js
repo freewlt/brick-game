@@ -139,7 +139,7 @@ const Game = {
   },
 
   // 从 DailyScene 进入每日关卡游戏（dailyScene 引用用于结果回调）
-  showDailyGame(levelCfg, dailyScene) {
+  showDailyGame(levelCfg, dailyScene, seed = null) {
     const scene = new GameScene(this, 0, levelCfg, (isWin, score, carsWon, stars) => {
       // 先让 DailyScene 处理统计/成就
       dailyScene.onDailyResult(isWin)
@@ -148,7 +148,7 @@ const Game = {
         this.showDaily()
       })
       this.currentScene.init()
-    })
+    }, seed)
     this.currentScene = scene
     this.currentScene.init()
   },

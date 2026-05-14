@@ -380,7 +380,7 @@ export default class DailyScene {
     const hit = (b) => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h
 
     if (hit(this.startBtn)) {
-      this.game.showDailyGame(this.levelCfg, this)
+      this.game.showDailyGame(this.levelCfg, this, this.dateStr)
       return
     }
     if (hit(this.homeBtn) || hit(this._navBackBtn)) {

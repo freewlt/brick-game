@@ -16,11 +16,12 @@ import { share, ad } from '../utils/wxApi.js'
 export default class GameScene {
   // customCfg: 每日挑战专用关卡参数，传入时不走 CONFIG.LEVELS
   // onComplete: 每日挑战完成回调 (isWin, score, carsWon, stars) => void
-  constructor(game, levelIdx = 0, customCfg = null, onComplete = null) {
+  constructor(game, levelIdx = 0, customCfg = null, onComplete = null, seed = null) {
     this.game = game
     this.startLevel = levelIdx
     this._customCfg  = customCfg    // 每日挑战自定义参数
     this._onComplete = onComplete   // 每日挑战完成回调
+    this._seed       = seed         // 每日挑战棋盘种子（日期字符串）
     this.logic = new GameLogic()
     this.floatTexts   = []
     this.particles    = []
@@ -52,7 +53,7 @@ export default class GameScene {
   }
 
   init() {
-    this.logic.initLevel(this.startLevel, this._customCfg)
+    this.logic.initLevel(this.startLevel, this._customCfg, this._seed)
     // 本关车型集合（关卡内不变），用于已收集进度小条；避免每帧扫描 board 构 Set
     const cfg = this._customCfg || CONFIG.LEVELS[Math.min(this.startLevel, CONFIG.LEVELS.length - 1)]
     this._levelTypes = Array.from({ length: cfg.carTypes }, (_, i) => i)
