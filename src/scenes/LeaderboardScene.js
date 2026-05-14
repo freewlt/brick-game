@@ -96,34 +96,53 @@ export default class LeaderboardScene {
     })
   }
 
-  // ── 取数：两个 API 并行 ──────────────────────────────────────────────
+  // ── 取数：调云函数 getTopN ───────────────────────────────────────────
   _loadRank() {
-    let friendData = null
-    let myKV       = null
-    let done       = 0
-
-    const tryBuild = () => {
-      done++
-      if (done < 2) return
-      this._build(friendData || [], myKV)
-    }
-
-    cloud.getFriendKV([RANK_KEY],
-      (data) => { friendData = data || []; tryBuild() },
-      ()     => { friendData = [];         tryBuild() }
-    )
-
-    cloud.getMyKV([RANK_KEY],
-      (kvList) => {
-        const kv = (kvList || []).find(k => k.key === RANK_KEY)
-        myKV = kv ? (parseInt(kv.value, 10) || 0) : 0
-        tryBuild()
-      },
-      () => { myKV = null; tryBuild() }
+    cloud.call('getTopN', { n: 50 },
+      (list) => { this._buildFromCloud(list || []) },
+      ()     => { this._buildFromCloud([]) }
     )
   }
 
-  // ── 构建列表 + 预加载头像 ────────────────────────────────────────────
+  // ── 构建列表（云函数数据）+ 预加载头像 ──────────────────────────────
+  _buildFromCloud(list) {
+    const myInfo   = getMyUserInfo()
+    const myLevels = getMyProgress()
+
+    const rankList = list.map(item => ({
+      nickname:     item.nickname     || '玩家',
+      avatarUrl:    item.avatarUrl    || '',
+      levelsPassed: item.levelsPassed || 0,
+      isSelf:       !!item.isMe,
+      _img:         null,
+    }))
+
+    const selfInList = rankList.some(u => u.isSelf)
+    if (!selfInList) {
+      rankList.push({
+        nickname:     myInfo.nickname  || '我',
+        avatarUrl:    myInfo.avatarUrl || '',
+        levelsPassed: myLevels,
+        isSelf:       true,
+        _img:         null,
+      })
+    }
+
+    rankList.sort((a, b) => b.levelsPassed - a.levelsPassed)
+    this._rankList = rankList
+    this.loading   = false
+    this.game._rankCache = { list: rankList, ts: Date.now() }
+
+    rankList.forEach(item => {
+      if (!item.avatarUrl) return
+      const img = wx.createImage()
+      img.onload  = () => { item._img = img }
+      img.onerror = () => {}
+      img.src = item.avatarUrl
+    })
+  }
+
+  // ── 旧版 _build 保留（兜底，不再主动调用）────────────────────────────
   _build(friendData, myKV) {
     const myInfo   = getMyUserInfo()
     const myLevels = getMyProgress()
