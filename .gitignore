@@ -4,6 +4,9 @@ project.private.config.json
 # Claude Code 本地配置
 .claude/
 
+#设计需求
+docs/
+
 # Node 依赖（如果有）
 node_modules/
 
