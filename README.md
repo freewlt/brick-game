@@ -98,9 +98,12 @@
 ```
 brick-game/
 ├── game.js                   # 主入口，场景管理 & 事件绑定，动态 safeTop 计算
-├── game.json                 # 微信小游戏配置
-├── project.config.json       # 开发者工具项目配置
+├── game.json                 # 微信小游戏配置（cloud: true）
+├── project.config.json       # 开发者工具项目配置（cloudfunctionRoot）
 ├── sitemap.json
+├── cloudfunctions/
+│   ├── submitScore/          # 云函数：通关时 upsert 玩家分数到 leaderboard 集合
+│   └── getTopN/              # 云函数：查询全服 TOP 50 排行榜
 └── src/
     ├── config.js             # 全局常量（棋盘尺寸、30关配置、颜色主题、广告配置）
     ├── logic/
@@ -152,7 +155,7 @@ brick-game/
 |------|------|
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
 | `src/config.js` → `AD_CONFIG.rewardedUnitId` | 填入微信流量主激励视频广告单元 ID；留空时自动降级为分享获取道具 |
-| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID（开发者工具→云开发→环境 ID）；同时在云开发控制台创建集合 `leaderboard` 并部署云函数 `submitScore` / `getTopN` |
+| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID（已填：`cloud1-d5gc1kjfu38bc0a22`）；在云开发控制台创建集合 `leaderboard`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore` 和 `cloudfunctions/getTopN` 文件夹 → 上传并部署：云端安装依赖 |
 
 ---
 
