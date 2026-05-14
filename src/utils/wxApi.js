@@ -103,6 +103,16 @@ export const cloud = {
       })
     } catch (e) { warn('getUserCloudStorage', e); onFail && onFail(e) }
   },
+  call(name, data, onSuccess, onFail) {
+    try {
+      wx.cloud.callFunction({
+        name,
+        data,
+        success: (res) => onSuccess && onSuccess(res.result),
+        fail:    (e)   => { warn('callFunction:' + name, e); onFail && onFail(e) },
+      })
+    } catch (e) { warn('callFunction:' + name, e); onFail && onFail(e) }
+  },
 }
 
 // ── 激励视频广告 ──

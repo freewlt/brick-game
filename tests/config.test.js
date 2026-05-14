@@ -101,3 +101,11 @@ describe('ResultScene level routing logic', () => {
     expect(getRetryLevel(9)).toBe(9)
   })
 })
+
+describe('wxApi cloud.call', () => {
+  it('cloud 对象包含 call 方法', async () => {
+    const mod = await import('../src/utils/wxApi.js')
+    expect(typeof mod.cloud).toBe('object')
+    expect(typeof mod.cloud.call).toBe('function')
+  })
+})
