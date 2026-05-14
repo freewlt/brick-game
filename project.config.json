@@ -2,6 +2,7 @@
   "compileType": "game",
   "appid": "wxc3363c27a25febde",
   "projectname": "赢了个赢",
+  "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
     "es6": true,
     "postcss": false,
