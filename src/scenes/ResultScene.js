@@ -61,6 +61,8 @@ export default class ResultScene {
         saveProgress(this.levelIdx + 1)
         // 推进关卡进度，下次从首页进入直接进下一关
         saveLevelProgress(Math.min(this.levelIdx + 1, CONFIG.LEVELS.length - 1))
+        // 让排行榜缓存过期，下次进入时静默刷新拿到最新分数
+        if (this.game._rankCache) this.game._rankCache.ts = 0
       }
       this.lives = getLives()
       // 最后一关通关：1.2秒后自动跳到全通关彩蛋页（每日模式不触发）
