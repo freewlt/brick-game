@@ -93,8 +93,15 @@ const MY_PROGRESS_KEY = 'ywgy_my_progress'
 
 // 上传通关数（通关时调用）并本地备份（排行榜显示自己用）
 function saveProgress(levelsPassed) {
-  cloud.setKV([{ key: RANK_KEY, value: String(levelsPassed) }])
+  // 本地备份（排行榜兜底用）
   storage.set(MY_PROGRESS_KEY, levelsPassed)
+  // 上传到全服排行榜云数据库
+  const myInfo = getMyUserInfo()
+  cloud.call('submitScore', {
+    nickname:     myInfo.nickname  || '玩家',
+    avatarUrl:    myInfo.avatarUrl || '',
+    levelsPassed,
+  })
 }
 
 // 读取本地缓存的自己通关数
