@@ -283,7 +283,9 @@ export default class GameScene {
 
   // ========== Header：对标目标UI（天蓝背景，无面板）==========
   _drawHeader(ctx, width, logic) {
+    const isDaily   = !!this._customCfg
     const levelNum  = logic.level + 1
+    const titleText = isDaily ? '每日挑战' : `第${levelNum}关`
     const hasLimit  = logic.maxMoves > 0
     const movesLeft = logic.movesLeft
     const isWarn    = hasLimit && movesLeft <= 10
@@ -300,21 +302,21 @@ export default class GameScene {
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
     ctx.strokeStyle = 'rgba(120,60,0,0.55)'
     ctx.lineWidth   = 4
-    ctx.strokeText(`第${levelNum}关`, padX, row1Y)
+    ctx.strokeText(titleText, padX, row1Y)
     const tg = ctx.createLinearGradient(padX, row1Y - 14, padX, row1Y + 14)
     tg.addColorStop(0,   '#FFE855')
     tg.addColorStop(0.5, '#FFD000')
     tg.addColorStop(1,   '#FFA000')
     ctx.fillStyle = tg
-    ctx.fillText(`第${levelNum}关`, padX, row1Y)
+    ctx.fillText(titleText, padX, row1Y)
     ctx.restore()
 
-    // 「目标 ★★★」— 与「第N关」同行，紧跟其右侧
+    // 「目标 ★★★」— 与标题同行，紧跟其右侧
     // 实时星数：游戏中用 calcCurrentStars()，通关/失败后用 calcStars()
     const stars = logic.win || logic.gameOver
       ? (logic.calcStars ? logic.calcStars() : 0)
       : (logic.calcCurrentStars ? logic.calcCurrentStars() : 0)
-    const titleW = measureCached(ctx, 'bold 28px sans-serif', `第${levelNum}关`, this._textWidthCache)
+    const titleW = measureCached(ctx, 'bold 28px sans-serif', titleText, this._textWidthCache)
     // 「目标」小字起点
     const starAreaX = padX + titleW + 12
 
