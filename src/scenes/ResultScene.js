@@ -92,8 +92,9 @@ export default class ResultScene {
   draw() {
     const { ctx, width: W, height: H } = this.game
     const { isWin, levelIdx } = this
-    const levelNum  = levelIdx + 1
-    const isLastLvl = levelIdx >= (CONFIG.LEVELS.length - 1)
+    const isDaily    = this._onClose !== null
+    const levelNum   = levelIdx + 1
+    const isLastLvl  = !isDaily && levelIdx >= (CONFIG.LEVELS.length - 1)
     const safeTop   = this.game.safeTop || 0
     const cx        = W / 2
     const padX      = 16
@@ -153,10 +154,10 @@ export default class ResultScene {
       ctx.fillStyle = g
       ctx.shadowColor = 'rgba(255,200,0,0.45)'
       ctx.shadowBlur  = 8
-      ctx.fillText(isLastLvl ? '全部通关！太强了！' : `第 ${levelNum} 关通过！`, cx, cy)
+      ctx.fillText(isLastLvl ? '全部通关！太强了！' : (isDaily ? '每日挑战通过！' : `第 ${levelNum} 关通过！`), cx, cy)
     } else {
       ctx.fillStyle = '#2a6080'
-      ctx.fillText(`第 ${levelNum} 关失败`, cx, cy)
+      ctx.fillText(isDaily ? '每日挑战失败' : `第 ${levelNum} 关失败`, cx, cy)
     }
     ctx.restore()
     cy += 36
