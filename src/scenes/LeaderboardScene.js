@@ -70,9 +70,21 @@ export default class LeaderboardScene {
     this.frame          = 0
     this._livesRefreshAt = 0
 
-    // 有缓存：直接显示，60秒内不重新拉取
+    // 有缓存：直接显示
     const cache = this.game._rankCache
     if (cache && cache.list.length > 0) {
+      if (cache.ts === 0) {
+        // 通关后主动失效：用本地最新进度更新自己的条目，立即显示，后台静默刷新
+        const myLevels = getMyProgress()
+        const self = cache.list.find(u => u.isSelf)
+        if (self) self.levelsPassed = myLevels
+        cache.list.sort((a, b) => b.levelsPassed - a.levelsPassed)
+        cache.ts = Date.now()
+        this._rankList = cache.list
+        this.loading   = false
+        this._silentRefresh()
+        return
+      }
       this._rankList = cache.list
       this.loading   = false
       if (Date.now() - cache.ts > 60_000) this._silentRefresh()

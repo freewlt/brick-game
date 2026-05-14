@@ -169,6 +169,7 @@ brick-game/
 - **新增** 普通关卡棋盘布局固定：同一关卡每次进入棋盘完全一致（LCG 种子 `level_N`）
 - **新增** 每日挑战棋盘布局固定：同一天退出重进棋盘完全一致（LCG 种子为日期字符串）
 - **新增** 排行榜二次进入静默显示缓存数据，后台静默刷新（60 秒过期），消除加载等待
+- **修复** 通关后进入排行榜立即显示最新通关数，不再展示旧缓存（通关时主动失效缓存，强制重新拉取）
 - **新增** 排行榜无好友数据时展示本地战绩（通关数、每日连续天数、累计通关次数）
 
 ### v1.4.0（2026-05-13）
@@ -243,3 +244,32 @@ brick-game/
 ## License
 
 MIT
+
+## superpowers
+Step1: /superpowers:brainstorm
+
+→ 苏格拉底式问答，理清需求和边界
+
+Step2: /superpowers:writing-plan
+
+→ 生成实现计划：文件列表、依赖关系、任务拆分
+
+Step3: 审阅计划，修改后确认
+
+→ Claude 不会在你没确认前动手
+
+Step4: /superpowers:execute-plan
+
+→ 自动分发给子 Agent
+
+→ 每个 Agent 遵循 TDD
+
+→ 任务间自动 Code Review
+
+→ 关键问题阻塞推进
+
+Step5: 验证 + Code Review
+
+→ verification-before-completion 自动跑测试
+
+→ requesting-code-review 发起最终审查
