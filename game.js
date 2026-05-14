@@ -59,6 +59,11 @@ const Game = {
   _privacyOK:  null,
 
   init() {
+    // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
+    if (typeof wx !== 'undefined' && wx.cloud) {
+      wx.cloud.init({ env: 'YOUR_ENV_ID', traceUser: true })
+    }
+
     // 初始化音效系统（创建 WebAudioContext）
     AudioManager.init()
 

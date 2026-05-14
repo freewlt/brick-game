@@ -4,5 +4,6 @@
     "request": 5000
   },
   "subpackages": [],
-  "__usePrivacyCheck__": true
+  "__usePrivacyCheck__": true,
+  "cloud": true
 }
