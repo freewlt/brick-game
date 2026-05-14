@@ -65,26 +65,34 @@ export default class LeaderboardScene {
   }
 
   init() {
-    this.loading        = true
-    this._rankList      = []
     this.scrollY        = 0
     this._velY          = 0
     this.frame          = 0
-    this._livesRefreshAt = 0   // 强制刷新一次
+    this._livesRefreshAt = 0
 
-    // 本次会话已拒绝 → 直接显示提示页，不再调隐私 API
+    // 有缓存：直接显示，60秒内不重新拉取
+    const cache = this.game._rankCache
+    if (cache && cache.list.length > 0) {
+      this._rankList = cache.list
+      this.loading   = false
+      if (Date.now() - cache.ts > 60_000) this._silentRefresh()
+      return
+    }
+
+    // 无缓存：正常加载流程
+    this.loading   = true
+    this._rankList = []
+
     if (this._denied) return
 
-    // 优先复用启动时已记录的授权状态，避免重复弹隐私窗口
     const pri = this.game._privacyOK
     if (pri === false) { this._denied = true; this.loading = false; return }
     if (pri === true)  { this._loadRank(); return }
 
-    // pri === null：启动时未问过（极端情况），现场补调一次
     auth.requirePrivacy().then((ok) => {
       this.game._privacyOK = ok
       if (!ok) { this._denied = true; this.loading = false; return }
-      userInfo.getProfile('用于好友排行榜显示',
+      userInfo.getProfile('用于排行榜显示',
         (info) => {
           if (info.nickName) {
             saveMyUserInfo({ nickname: info.nickName, avatarUrl: info.avatarUrl || '' })
@@ -94,6 +102,13 @@ export default class LeaderboardScene {
         () => { this._loadRank() }
       )
     })
+  }
+
+  _silentRefresh() {
+    cloud.call('getTopN', { n: 50 },
+      (list) => { this._buildFromCloud(list || []) },
+      () => {}
+    )
   }
 
   // ── 取数：调云函数 getTopN ───────────────────────────────────────────

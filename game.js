@@ -57,11 +57,12 @@ const Game = {
   // 隐私授权状态：true=已授权 / false=用户拒绝 / null=未询问过
   // 让 LeaderboardScene 复用此状态，避免重复弹授权窗口
   _privacyOK:  null,
+  _rankCache:  null,   // { list, ts } — 排行榜跨场景缓存
 
   init() {
     // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
     if (typeof wx !== 'undefined' && wx.cloud) {
-      wx.cloud.init({ env: 'YOUR_ENV_ID', traceUser: true })
+      wx.cloud.init({ env: 'cloud1-d5gc1kjfu38bc0a22', traceUser: true })
     }
 
     // 初始化音效系统（创建 WebAudioContext）
