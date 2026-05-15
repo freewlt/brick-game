@@ -29,6 +29,7 @@ export default class ResultScene {
     // 倒计时缓存：避免每帧调用 wx.getStorageSync()
     this._recoverSecs  = 0
     this._recoverTimer = null
+    this._bgGrad       = null  // 背景渐变缓存，首次 draw() 时创建
     // 机会系统
     this.lives        = 3         // 扣完后的剩余机会
     this._lifeSpent   = false     // 失败只扣一次
@@ -114,12 +115,14 @@ export default class ResultScene {
     const padX      = 16
 
     // ── 背景：天蓝渐变 ──
-    const bg = ctx.createLinearGradient(0, 0, 0, H)
-    bg.addColorStop(0,    '#5BC8F5')
-    bg.addColorStop(0.42, '#7DD6F8')
-    bg.addColorStop(0.72, '#A8E6FF')
-    bg.addColorStop(1,    '#C5F0FF')
-    ctx.fillStyle = bg
+    if (!this._bgGrad) {
+      this._bgGrad = ctx.createLinearGradient(0, 0, 0, H)
+      this._bgGrad.addColorStop(0,    '#5BC8F5')
+      this._bgGrad.addColorStop(0.42, '#7DD6F8')
+      this._bgGrad.addColorStop(0.72, '#A8E6FF')
+      this._bgGrad.addColorStop(1,    '#C5F0FF')
+    }
+    ctx.fillStyle = this._bgGrad
     ctx.fillRect(0, 0, W, H)
 
     // ── 彩屑（胜利时） ──
