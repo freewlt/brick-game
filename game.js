@@ -20,7 +20,8 @@ const sysInfo = wx.getSystemInfoSync()
 const logicWidth  = sysInfo.windowWidth
 const logicHeight = sysInfo.windowHeight
 // 设备像素比（iPhone高清屏通常是2或3）
-const dpr = sysInfo.pixelRatio || 1
+// 小游戏长时间运行时 DPR=3 会显著放大 Canvas 显存占用；卡通画面封顶到 2 更稳。
+const dpr = Math.min(sysInfo.pixelRatio || 1, 2)
 
 // ✅ 动态计算安全顶部高度（状态栏 + 胶囊按钮区，适配刘海屏/安卓各机型）
 // statusBarHeight = 状态栏高度（系统级，各机型不同）
@@ -98,8 +99,7 @@ const Game = {
   },
 
   showStart() {
-    this.currentScene = new StartScene(this)
-    this.currentScene.init()
+    this._switchScene(new StartScene(this))
     if (!this._loopStarted) {
       this._loopStarted = true
       this.loop()
@@ -107,41 +107,32 @@ const Game = {
   },
 
   showGame(levelIdx = 0) {
-    saveLevelProgress(levelIdx)   // 记录本次进入的关卡，退出即恢复
-    this.currentScene = new GameScene(this, levelIdx, null, null, `level_${levelIdx}`)
-    this.currentScene.init()
+    saveLevelProgress(levelIdx)
+    this._switchScene(new GameScene(this, levelIdx, null, null, `level_${levelIdx}`))
   },
 
   showResult(score, carsWon, levelIdx, isWin, stars) {
-    this.currentScene = new ResultScene(this, score, carsWon, levelIdx, isWin, stars)
-    this.currentScene.init()
+    this._switchScene(new ResultScene(this, score, carsWon, levelIdx, isWin, stars))
   },
 
   showLeaderboard() {
-    this.currentScene = new LeaderboardScene(this)
-    this.currentScene.init()
+    this._switchScene(new LeaderboardScene(this))
   },
 
   showSettings() {
-    // 进设置页时停掉 BGM，避免 timer 泄漏
-    AudioManager.stopBGM()
-    this.currentScene = new SettingsScene(this)
-    this.currentScene.init()
+    this._switchScene(new SettingsScene(this))
   },
 
   showAllClear() {
-    this.currentScene = new AllClearScene(this)
-    this.currentScene.init()
+    this._switchScene(new AllClearScene(this))
   },
 
   showAchievements() {
-    this.currentScene = new AchievementScene(this)
-    this.currentScene.init()
+    this._switchScene(new AchievementScene(this))
   },
 
   showDaily() {
-    this.currentScene = new DailyScene(this)
-    this.currentScene.init()
+    this._switchScene(new DailyScene(this))
   },
 
   // 从 DailyScene 进入每日关卡游戏（dailyScene 引用用于结果回调）
@@ -150,13 +141,11 @@ const Game = {
       // 先让 DailyScene 处理统计/成就
       dailyScene.onDailyResult(isWin)
       // 再展示结算卡片，结算"下一步"返回每日挑战页
-      this.currentScene = new ResultScene(this, score, carsWon, -1, isWin, stars, () => {
+      this._switchScene(new ResultScene(this, score, carsWon, -1, isWin, stars, () => {
         this.showDaily()
-      })
-      this.currentScene.init()
+      }))
     }, seed)
-    this.currentScene = scene
-    this.currentScene.init()
+    this._switchScene(scene)
   },
 
   loop() {
@@ -197,6 +186,14 @@ const Game = {
     ctx.fillStyle = '#fff'
     ctx.fillText(toast.text, logicWidth / 2, ty + th / 2)
     ctx.restore()
+  },
+
+  _switchScene(newScene) {
+    if (this.currentScene && typeof this.currentScene.destroy === 'function') {
+      this.currentScene.destroy()
+    }
+    this.currentScene = newScene
+    newScene.init()
   },
 
   bindEvents() {

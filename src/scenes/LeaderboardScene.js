@@ -470,4 +470,6 @@ export default class LeaderboardScene {
     if (hit(this.shareBtn)) { shareForLife(() => {}); return }
     if (hit(this.backBtn) || hit(this._navBackBtn)) { this.game.showStart() }
   }
+
+  destroy() {}
 }

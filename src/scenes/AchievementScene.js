@@ -302,4 +302,6 @@ export default class AchievementScene {
       this.game.showStart()
     }
   }
+
+  destroy() {}
 }

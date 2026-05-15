@@ -387,4 +387,6 @@ export default class DailyScene {
       this.game.showStart()
     }
   }
+
+  destroy() {}
 }

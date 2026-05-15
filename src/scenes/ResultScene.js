@@ -445,4 +445,8 @@ export default class ResultScene {
       }
     }
   }
+
+  destroy() {
+    this.confetti.length = 0
+  }
 }

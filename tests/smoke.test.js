@@ -29,3 +29,12 @@ describe('smoke', () => {
     expect(g.maxMoves).toBe(45)
   })
 })
+
+describe('Scene destroy 接口约定', () => {
+  it('destroy() 调用后不抛出异常（duck-type smoke）', () => {
+    class MockScene { destroy() { this._destroyed = true } }
+    const s = new MockScene()
+    expect(() => s.destroy()).not.toThrow()
+    expect(s._destroyed).toBe(true)
+  })
+})

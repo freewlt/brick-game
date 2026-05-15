@@ -351,4 +351,10 @@ export default class AllClearScene {
       this.game.showStart()
     }
   }
+
+  destroy() {
+    AudioManager.stopBGM()
+    this.particles = []
+    this.floats    = []
+  }
 }

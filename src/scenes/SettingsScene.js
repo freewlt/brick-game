@@ -256,4 +256,6 @@ export default class SettingsScene {
       return
     }
   }
+
+  destroy() {}
 }

@@ -445,4 +445,6 @@ export default class StartScene {
       this.game.showGame(getLevelProgress())
     }
   }
+
+  destroy() {}
 }
