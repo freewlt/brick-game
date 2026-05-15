@@ -79,7 +79,10 @@ export function stripVS(str) {
 //   rightAlpha:  右侧高光起始 alpha    默认 0.16
 //   bottomAlpha: 底部反光起始 alpha    默认 0.20
 //   border:      外描边颜色            默认 'rgba(160,215,245,0.60)'
-export function drawGlassCard(ctx, x, y, w, h, r, baseColor, opts = {}) {
+// cache: optional Map for reusing LinearGradient objects across frames.
+//   Only pass a cache when opts are stable for the same x/y/w/h/baseColor.
+//   Different opts with the same geometry will produce wrong visuals silently.
+export function drawGlassCard(ctx, x, y, w, h, r, baseColor, opts = {}, cache = null) {
   const {
     sides       = 'all',
     topAlpha    = 0.62,
@@ -90,40 +93,55 @@ export function drawGlassCard(ctx, x, y, w, h, r, baseColor, opts = {}) {
     border      = 'rgba(160,215,245,0.60)',
   } = opts
 
+  const getGrad = (subtype, x0, y0, x1, y1, stops) => {
+    if (cache) {
+      const key = `glasscard|${subtype}|${x}|${y}|${w}|${h}|${baseColor}`
+      if (cache.has(key)) return cache.get(key)
+      const g = ctx.createLinearGradient(x0, y0, x1, y1)
+      for (const [offset, color] of stops) g.addColorStop(offset, color)
+      cache.set(key, g)
+      return g
+    }
+    const g = ctx.createLinearGradient(x0, y0, x1, y1)
+    for (const [offset, color] of stops) g.addColorStop(offset, color)
+    return g
+  }
+
   ctx.save()
   ctx.fillStyle = baseColor
   roundRect(ctx, x, y, w, h, r); ctx.fill()
 
-  // 顶部高光
-  const tg = ctx.createLinearGradient(x, y, x, y + h * 0.44)
-  tg.addColorStop(0,   `rgba(255,255,255,${topAlpha})`)
-  tg.addColorStop(0.5, `rgba(255,255,255,${midAlpha})`)
-  tg.addColorStop(1,   'rgba(255,255,255,0.00)')
+  const tg = getGrad('top', x, y, x, y + h * 0.44, [
+    [0,   `rgba(255,255,255,${topAlpha})`],
+    [0.5, `rgba(255,255,255,${midAlpha})`],
+    [1,   'rgba(255,255,255,0.00)'],
+  ])
   ctx.fillStyle = tg
   roundRect(ctx, x, y, w, h * 0.44, { tl: r, tr: r, bl: 0, br: 0 }); ctx.fill()
 
   if (sides === 'all') {
-    // 左侧
-    const lg = ctx.createLinearGradient(x, y, x + w * 0.14, y)
-    lg.addColorStop(0, `rgba(255,255,255,${sideAlpha})`)
-    lg.addColorStop(1, 'rgba(255,255,255,0.00)')
+    const lg = getGrad('left', x, y, x + w * 0.14, y, [
+      [0, `rgba(255,255,255,${sideAlpha})`],
+      [1, 'rgba(255,255,255,0.00)'],
+    ])
     ctx.fillStyle = lg
     roundRect(ctx, x, y, w * 0.14, h, { tl: r, tr: 0, bl: r, br: 0 }); ctx.fill()
-    // 右侧
-    const rg = ctx.createLinearGradient(x + w, y, x + w - w * 0.10, y)
-    rg.addColorStop(0, `rgba(255,255,255,${rightAlpha})`)
-    rg.addColorStop(1, 'rgba(255,255,255,0.00)')
+
+    const rg = getGrad('right', x + w, y, x + w - w * 0.10, y, [
+      [0, `rgba(255,255,255,${rightAlpha})`],
+      [1, 'rgba(255,255,255,0.00)'],
+    ])
     ctx.fillStyle = rg
     roundRect(ctx, x + w - w * 0.10, y, w * 0.10, h, { tl: 0, tr: r, bl: 0, br: r }); ctx.fill()
-    // 底部反光
-    const bg2 = ctx.createLinearGradient(x, y + h, x, y + h - h * 0.16)
-    bg2.addColorStop(0, `rgba(255,255,255,${bottomAlpha})`)
-    bg2.addColorStop(1, 'rgba(255,255,255,0.00)')
+
+    const bg2 = getGrad('bottom', x, y + h, x, y + h - h * 0.16, [
+      [0, `rgba(255,255,255,${bottomAlpha})`],
+      [1, 'rgba(255,255,255,0.00)'],
+    ])
     ctx.fillStyle = bg2
     roundRect(ctx, x, y + h - h * 0.16, w, h * 0.16, { tl: 0, tr: 0, bl: r, br: r }); ctx.fill()
   }
 
-  // 边框
   ctx.strokeStyle = border
   ctx.lineWidth   = 1.2
   roundRect(ctx, x, y, w, h, r); ctx.stroke()
