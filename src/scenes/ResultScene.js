@@ -26,6 +26,9 @@ export default class ResultScene {
     this.confetti = []
     this._initConfetti()
     this._allClearTimer = null
+    // 倒计时缓存：避免每帧调用 wx.getStorageSync()
+    this._recoverSecs  = 0
+    this._recoverTimer = null
     // 机会系统
     this.lives        = 3         // 扣完后的剩余机会
     this._lifeSpent   = false     // 失败只扣一次
@@ -73,6 +76,13 @@ export default class ResultScene {
           this.game.showAllClear()
         }, 1200)
       }
+    }
+    // 失败且机会耗尽时，启动 1 秒刷新缓存倒计时（避免每帧 getStorageSync）
+    if (!this.isWin && this.lives <= 0) {
+      this._recoverSecs = getRecoverSecondsLeft()
+      this._recoverTimer = setInterval(() => {
+        this._recoverSecs = getRecoverSecondsLeft()
+      }, 1000)
     }
   }
 
@@ -392,7 +402,7 @@ export default class ResultScene {
 
       // 等待恢复提示（仅机会=0时）
       if (this.lives <= 0) {
-        const secs = getRecoverSecondsLeft()
+        const secs = this._recoverSecs
         const mm   = String(Math.floor(secs / 60)).padStart(2, '0')
         const ss   = String(secs % 60).padStart(2, '0')
         drawGlassCard(ctx, padX, cy, cardW, 44, 12, 'rgba(210,235,255,0.50)')
@@ -452,6 +462,10 @@ export default class ResultScene {
     if (this._allClearTimer) {
       clearTimeout(this._allClearTimer)
       this._allClearTimer = null
+    }
+    if (this._recoverTimer) {
+      clearInterval(this._recoverTimer)
+      this._recoverTimer = null
     }
     this.confetti.length = 0
   }

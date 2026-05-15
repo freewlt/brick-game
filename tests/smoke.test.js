@@ -57,6 +57,66 @@ describe('AudioManager.playWin / playLose 不注册到 _sfxTimers', () => {
   })
 })
 
+describe('ResultScene._recoverTimer 缓存行为', () => {
+  it('lives > 0 时不启动 _recoverTimer', () => {
+    // NOTE: ResultScene 依赖 wx 全局，使用内联 replica 验证逻辑契约
+    class MockResultScene {
+      constructor(lives) {
+        this._recoverSecs  = 0
+        this._recoverTimer = null
+        this.lives = lives
+      }
+      init() {
+        if (this.lives <= 0) {
+          this._recoverSecs = 1800
+          this._recoverTimer = setInterval(() => {
+            this._recoverSecs = 1799
+          }, 1000)
+        }
+      }
+      destroy() {
+        if (this._recoverTimer) {
+          clearInterval(this._recoverTimer)
+          this._recoverTimer = null
+        }
+      }
+    }
+    const scene = new MockResultScene(3)
+    scene.init()
+    expect(scene._recoverTimer).toBeNull()
+    scene.destroy()
+  })
+
+  it('lives <= 0 时启动 _recoverTimer，destroy() 后清空', () => {
+    class MockResultScene {
+      constructor(lives) {
+        this._recoverSecs  = 0
+        this._recoverTimer = null
+        this.lives = lives
+      }
+      init() {
+        if (this.lives <= 0) {
+          this._recoverSecs = 1800
+          this._recoverTimer = setInterval(() => {
+            this._recoverSecs = 1799
+          }, 1000)
+        }
+      }
+      destroy() {
+        if (this._recoverTimer) {
+          clearInterval(this._recoverTimer)
+          this._recoverTimer = null
+        }
+      }
+    }
+    const scene = new MockResultScene(0)
+    scene.init()
+    expect(scene._recoverTimer).not.toBeNull()
+    scene.destroy()
+    expect(scene._recoverTimer).toBeNull()
+  })
+})
+
 // NOTE: game.js 依赖 wx 全局和模块级 ctx/canvas，无法在 Node 环境导入。
 // 以下测试用内联 replica 验证逻辑契约，不提供 game.js 的回归保护。
 describe('Game._handleRenderError 恢复逻辑', () => {
