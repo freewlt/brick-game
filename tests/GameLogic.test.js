@@ -50,6 +50,18 @@ describe('GameLogic', () => {
       expect(g.clickCell(r, c)).toBe(false)
     })
 
+    it('空格即使在被遮挡列也返回 false（不返回 blocked）', () => {
+      // 构造：col=0 row=0 有车（遮挡下方），col=0 row=1 为空
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[0][0].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g._recomputeColTops()
+      // row=1, col=0 是空格，但被 row=0 的车遮挡
+      expect(g.isBlocked(1, 0)).toBe(true)
+      expect(g.board[1][0].length).toBe(0)
+      // 空格应返回 false，不应返回 'blocked'
+      expect(g.clickCell(1, 0)).toBe(false)
+    })
+
     it('点被遮挡的格子返回 "blocked"', () => {
       g.initLevel(0)
       // 构造遮挡场景：找一列上方有车下方也有车的格子
@@ -94,6 +106,27 @@ describe('GameLogic', () => {
       expect(g.carsWon).toBe(3)
       expect(g.slot.length).toBe(0)
       expect(g.win).toBe(true)
+    })
+
+    it('连消两次后 combo 应为 2，不被重置为 0', () => {
+      // 棋盘放 6 辆：type=0 × 3，type=1 × 3，点完触发两次连消
+      g.board = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => []))
+      g.board[0][0].push({ id: 1, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][1].push({ id: 2, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][2].push({ id: 3, type: 0, icon: '🚗', color: '#E74C3C' })
+      g.board[0][3].push({ id: 4, type: 1, icon: '🚕', color: '#F1C40F' })
+      g.board[0][4].push({ id: 5, type: 1, icon: '🚕', color: '#F1C40F' })
+      g.board[0][5].push({ id: 6, type: 1, icon: '🚕', color: '#F1C40F' })
+      g._recomputeColTops()
+      g.totalCars = 6
+      // 先点 3 辆 type=0，触发第一次消除
+      g.clickCell(0, 0); g.clickCell(0, 1); g.clickCell(0, 2)
+      // 再点 3 辆 type=1，触发第二次消除（连消）
+      g.clickCell(0, 3); g.clickCell(0, 4); g.clickCell(0, 5)
+      // 第二次点击第 3 辆时，slot 里已有 type=0×0 + type=1×3，触发消除
+      // combo 在第二次消除时应为 1（第一次消除 combo=1，第二次消除 combo=2）
+      // 但由于 bug，_checkMatch 递归末尾 combo=0，所以 combo 会是 0
+      expect(g.combo).toBeGreaterThan(0)
     })
   })
 

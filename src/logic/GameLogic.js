@@ -279,10 +279,10 @@ export default class GameLogic {
   // ========== 点击逻辑 ==========
   clickCell(r, c) {
     if (this.gameOver || this.win) return false
-    // ① 遮挡检查
-    if (this.isBlocked(r, c)) return 'blocked'
     const stack = this.board[r][c]
     if (!stack || stack.length === 0) return false
+    // ① 遮挡检查（空格已在上面排除，这里只对有车的格子判断）
+    if (this.isBlocked(r, c)) return 'blocked'
     if (this.slot.length >= this.slotMax) return false   // 用 slotMax（扩槽后=7）
 
     // ② 存快照（每次只保留最新1个）
@@ -302,6 +302,7 @@ export default class GameLogic {
     this._insertToSlot({ ...car })
     this.moves++
 
+    this.combo = 0   // 每次点击开始新的连消链
     this._checkMatch()
     this._checkWin()
 
@@ -348,7 +349,6 @@ export default class GameLogic {
         return
       }
     }
-    this.combo = 0
   }
 
   _boardEmpty() {
