@@ -8,6 +8,7 @@
 
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { CONFIG } from '../config.js'
+import { seededRng } from '../utils/rng.js'
 import {
   getDailyState,
   completeDailyChallenge,
@@ -16,16 +17,6 @@ import {
   checkAndUnlockAchievements,
 } from '../utils/storage.js'
 const e = stripVS
-
-// ── 伪随机工具（LCG，只依赖种子，不用 Math.random） ──
-function seededRng(seed) {
-  let s = 0
-  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0
-  return function () {
-    s = (s * 1664525 + 1013904223) >>> 0
-    return s / 0xFFFFFFFF
-  }
-}
 
 // 用日期字符串生成当日关卡参数
 function buildDailyLevel(dateStr) {

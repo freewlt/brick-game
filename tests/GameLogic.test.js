@@ -279,6 +279,42 @@ describe('GameLogic', () => {
       g.moves = Math.floor(g.maxMoves * 0.8)
       expect(g.calcStars()).toBe(1)
     })
+
+    it('maxMoves=0 且步均效率 ≤1.2 给 3 星', () => {
+      g.initLevel(0)
+      g.maxMoves   = 0
+      g.totalCars  = 27
+      g.win        = true
+      g.moves      = 30   // 30/27 ≈ 1.11 ≤ 1.2
+      expect(g.calcStars()).toBe(3)
+    })
+
+    it('maxMoves=0 且步均效率 1.2~1.8 给 2 星', () => {
+      g.initLevel(0)
+      g.maxMoves   = 0
+      g.totalCars  = 27
+      g.win        = true
+      g.moves      = 40   // 40/27 ≈ 1.48，1.2 < 1.48 ≤ 1.8
+      expect(g.calcStars()).toBe(2)
+    })
+
+    it('maxMoves=0 且步均效率 >1.8 给 1 星', () => {
+      g.initLevel(0)
+      g.maxMoves   = 0
+      g.totalCars  = 27
+      g.win        = true
+      g.moves      = 55   // 55/27 ≈ 2.04 > 1.8
+      expect(g.calcStars()).toBe(1)
+    })
+
+    it('maxMoves=0 且 totalCars=0 时不除零（兜底 1）', () => {
+      g.initLevel(0)
+      g.maxMoves   = 0
+      g.totalCars  = 0
+      g.win        = true
+      g.moves      = 0    // 0/max(1,0)=0 ≤ 1.2 → 3 星
+      expect(g.calcStars()).toBe(3)
+    })
   })
 
   describe('isBlocked', () => {

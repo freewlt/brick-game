@@ -1,6 +1,7 @@
 // 游戏核心逻辑 - 赢了个赢（关卡制，无倒计时）
 import { CONFIG } from '../config.js'
 import { getExtraProps, spendExtraProp } from '../utils/storage.js'
+import { seededRng } from '../utils/rng.js'
 
 export default class GameLogic {
   constructor() {
@@ -135,12 +136,7 @@ export default class GameLogic {
   }
 
   _makeRng(seed) {
-    let s = 0
-    for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0
-    return function () {
-      s = (s * 1664525 + 1013904223) >>> 0
-      return s / 0xFFFFFFFF
-    }
+    return seededRng(seed)
   }
 
   // ========== ① 遮挡系统 ==========
