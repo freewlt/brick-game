@@ -254,13 +254,16 @@ const AudioManager = {
       { freq: 1319, dur: 0.20, vol: 0.50 },  // E6
       { freq: 1568, dur: 0.35, vol: 0.55 },  // G6
     ]
-    this._playNotes(notes, 95)
-    // 铃声叠加，营造庆祝感
-    this._setSfxTimeout(() => this._bell(2093, 0.7, 0.28), 480)  // C7 高铃
-    this._setSfxTimeout(() => this._bell(1568, 0.9, 0.22), 560)  // G6 铃
+    // fire-and-forget：不受 stopSFX 管控，用原生 setTimeout
+    notes.forEach((n, i) => {
+      setTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * 95)
+    })
+    // 铃声叠加，营造庆祝感（fire-and-forget，不受 stopSFX 管控）
+    setTimeout(() => this._bell(2093, 0.7, 0.28), 480)  // C7 高铃
+    setTimeout(() => this._bell(1568, 0.9, 0.22), 560)  // G6 铃
     // 气泡连串
     for (let i = 0; i < 6; i++) {
-      this._setSfxTimeout(() => this._pop(0.15 + Math.random() * 0.1), i * 80 + 50)
+      setTimeout(() => this._pop(0.15 + Math.random() * 0.1), i * 80 + 50)
     }
   },
 
@@ -273,11 +276,14 @@ const AudioManager = {
       { freq: 262, dur: 0.26, vol: 0.32 },  // C4
       { freq: 220, dur: 0.35, vol: 0.28 },  // A3
     ]
-    this._playNotes(notes, 130)
-    // 结尾加一个低沉滑落
-    this._setSfxTimeout(() => this._sweep(220, 130, 'triangle', 0.35, 0.2), 520)
+    // fire-and-forget：不受 stopSFX 管控，用原生 setTimeout
+    notes.forEach((n, i) => {
+      setTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * 130)
+    })
+    // 结尾加一个低沉滑落（fire-and-forget，不受 stopSFX 管控）
+    setTimeout(() => this._sweep(220, 130, 'triangle', 0.35, 0.2), 520)
     // 低频噪声，增加"沮丧"质感
-    this._setSfxTimeout(() => {
+    setTimeout(() => {
       if (!this._enabled || !this._ctx) return
       try {
         const ctx = this._ctx
@@ -374,7 +380,7 @@ const AudioManager = {
       // 关闭：先播音效（此时 _enabled 还是 true，能正常播放）
       this._sweep(800, 300, 'sine', 0.18, 0.28)         // 下滑音表示"关"
       // 延迟一帧再真正禁用，确保音效 nodes 已加入调度
-      setTimeout(() => {
+      this._setSfxTimeout(() => {
         this._enabled = false
         this.stopBGM()
       }, 30)
