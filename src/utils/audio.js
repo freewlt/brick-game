@@ -258,7 +258,7 @@ const AudioManager = {
     ]
     // fire-and-forget：不受 stopSFX 管控，用原生 setTimeout
     notes.forEach((n, i) => {
-      setTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * 95)
+      setTimeout(() => this._marimba(n.freq, n.dur, n.vol), i * 95)
     })
     // 铃声叠加，营造庆祝感（fire-and-forget，不受 stopSFX 管控）
     setTimeout(() => this._bell(2093, 0.7, 0.28), 480)  // C7 高铃
@@ -280,7 +280,7 @@ const AudioManager = {
     ]
     // fire-and-forget：不受 stopSFX 管控，用原生 setTimeout
     notes.forEach((n, i) => {
-      setTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * 130)
+      setTimeout(() => this._marimba(n.freq, n.dur, n.vol), i * 130)
     })
     // 结尾加一个低沉滑落（fire-and-forget，不受 stopSFX 管控）
     setTimeout(() => this._sweep(220, 130, 'triangle', 0.35, 0.2), 520)
