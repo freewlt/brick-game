@@ -3,7 +3,7 @@ import GameLogic from '../logic/GameLogic.js'
 import { CONFIG } from '../config.js'
 import { roundRect, measureCached } from '../utils/draw.js'
 import AudioManager from '../utils/audio.js'
-import { addExtraProp, SHARE_CONFIG,
+import { SHARE_CONFIG,
   getAchievementStats, saveAchievementStats, checkAndUnlockAchievements,
 } from '../utils/storage.js'
 import { CONFIG as _CFG } from '../config.js'  // 成就列表引用
@@ -1227,10 +1227,8 @@ export default class GameScene {
   _grantProp(propType, source) {
     if (propType === 'expand') {
       this.logic.expandLeft++
-      addExtraProp('expand', 1)
     } else {
       this.logic.shuffleLeft++
-      addExtraProp('shuffle', 1)
     }
     const label = propType === 'expand' ? '➕ 扩槽' : '🔀 洗牌'
     this.floatTexts.push(new FloatText(
