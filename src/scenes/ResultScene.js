@@ -444,6 +444,10 @@ export default class ResultScene {
       shareForLife((next) => {
         if (next !== null) {
           this.lives    = next
+          if (this._recoverTimer) {
+            clearInterval(this._recoverTimer)
+            this._recoverTimer = null
+          }
           this.shareBtn = null  // 触发重绘时切换回"再试一次"按钮
         }
       })
