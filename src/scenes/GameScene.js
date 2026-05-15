@@ -51,6 +51,7 @@ export default class GameScene {
     // Header 文字宽度缓存（关卡内文字固定，避免每帧 measureText）
     this._textWidthCache   = new Map()
     this._gradCache = new Map()
+    this._resultTimer = null   // showResult 延迟句柄，destroy() 时清理
   }
 
   init() {
@@ -189,6 +190,7 @@ export default class GameScene {
       const showResult = () => {
         if (resultShown || this.game.currentScene !== this) return
         resultShown = true
+        this._resultTimer = null
         if (this._onComplete) {
           // 每日挑战模式：通过回调返回结果，不走普通 showResult
           this._onComplete(logic.win, logic.score, logic.carsWon, stars)
@@ -225,7 +227,7 @@ export default class GameScene {
       } else {
         AudioManager.playLose()
       }
-      setTimeout(showResult, 1000)
+      this._resultTimer = setTimeout(showResult, 1000)
     }
   }
 
@@ -1360,6 +1362,10 @@ export default class GameScene {
   destroy() {
     AudioManager.stopBGM()
     AudioManager.stopSFX()
+    if (this._resultTimer) {
+      clearTimeout(this._resultTimer)
+      this._resultTimer = null
+    }
     this.floatTexts.length = 0
     this.particles.length  = 0
     this._gradCache.clear()

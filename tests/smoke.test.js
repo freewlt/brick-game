@@ -117,6 +117,36 @@ describe('ResultScene._recoverTimer 缓存行为', () => {
   })
 })
 
+describe('GameScene._resultTimer 存储行为', () => {
+  it('destroy() 在 timer 触发前调用时清空句柄', () => {
+    // NOTE: GameScene 依赖 wx 全局，使用内联 replica 验证逻辑契约
+    let resultShown = false
+    const scene = {
+      _resultTimer: null,
+      game: { currentScene: null },
+      showResult() {
+        if (resultShown || this.game.currentScene !== this) return
+        resultShown = true
+        this._resultTimer = null
+      },
+      scheduleResult() {
+        this._resultTimer = setTimeout(() => this.showResult(), 0)
+      },
+      destroy() {
+        if (this._resultTimer) {
+          clearTimeout(this._resultTimer)
+          this._resultTimer = null
+        }
+      },
+    }
+    scene.game.currentScene = scene
+    scene.scheduleResult()
+    expect(scene._resultTimer).not.toBeNull()
+    scene.destroy()
+    expect(scene._resultTimer).toBeNull()
+  })
+})
+
 // NOTE: game.js 依赖 wx 全局和模块级 ctx/canvas，无法在 Node 环境导入。
 // 以下测试用内联 replica 验证逻辑契约，不提供 game.js 的回归保护。
 describe('Game._handleRenderError 恢复逻辑', () => {
