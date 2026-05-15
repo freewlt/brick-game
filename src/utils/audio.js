@@ -17,6 +17,16 @@ const AudioManager = {
     }
   },
 
+  _cleanupOnEnd(source, nodes) {
+    try {
+      source.onended = () => {
+        for (const node of nodes) {
+          try { node.disconnect() } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  },
+
   // ========== 内部：木琴音（marimba 感）==========
   // 用正弦波 + 快速 decay 模拟拨弦/木琴敲击感
   _marimba(freq, duration = 0.25, vol = 0.45) {
@@ -33,6 +43,7 @@ const AudioManager = {
       gain1.gain.setValueAtTime(vol, now)
       gain1.gain.exponentialRampToValueAtTime(0.001, now + duration)
       osc1.connect(gain1); gain1.connect(ctx.destination)
+      this._cleanupOnEnd(osc1, [osc1, gain1])
       osc1.start(now); osc1.stop(now + duration)
 
       // 泛音：2倍频，三角波，音量小，增加木质感
@@ -43,22 +54,8 @@ const AudioManager = {
       gain2.gain.setValueAtTime(vol * 0.25, now)
       gain2.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.6)
       osc2.connect(gain2); gain2.connect(ctx.destination)
+      this._cleanupOnEnd(osc2, [osc2, gain2])
       osc2.start(now); osc2.stop(now + duration * 0.7)
-
-      // 敲击瞬态：白噪声极短脉冲，模拟木槌敲击的"啪"
-      const bufSize = Math.floor(ctx.sampleRate * 0.015)
-      const buf     = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-      const data    = buf.getChannelData(0)
-      for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize)
-      const click   = ctx.createBufferSource()
-      const gainC   = ctx.createGain()
-      const filter  = ctx.createBiquadFilter()
-      filter.type = 'bandpass'; filter.frequency.value = freq * 1.5; filter.Q.value = 2
-      click.buffer = buf
-      gainC.gain.setValueAtTime(vol * 0.3, now)
-      gainC.gain.exponentialRampToValueAtTime(0.001, now + 0.018)
-      click.connect(filter); filter.connect(gainC); gainC.connect(ctx.destination)
-      click.start(now)
     } catch (e) {}
   },
 
@@ -78,6 +75,7 @@ const AudioManager = {
       gain.gain.linearRampToValueAtTime(vol, now + 0.004)
       gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
       osc.connect(gain); gain.connect(ctx.destination)
+      this._cleanupOnEnd(osc, [osc, gain])
       osc.start(now); osc.stop(now + duration)
     } catch (e) {}
   },
@@ -98,6 +96,7 @@ const AudioManager = {
       gain.gain.setValueAtTime(vol, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09)
       osc.connect(gain); gain.connect(ctx.destination)
+      this._cleanupOnEnd(osc, [osc, gain])
       osc.start(now); osc.stop(now + 0.1)
     } catch (e) {}
   },
@@ -116,6 +115,7 @@ const AudioManager = {
       gain.gain.setValueAtTime(vol, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
       osc.connect(gain); gain.connect(ctx.destination)
+      this._cleanupOnEnd(osc, [osc, gain])
       osc.start(now); osc.stop(now + duration + 0.02)
     } catch (e) {}
   },
@@ -215,6 +215,7 @@ const AudioManager = {
         gain.gain.setValueAtTime(0.18, ctx.currentTime)
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08)
         src.connect(filter); filter.connect(gain); gain.connect(ctx.destination)
+        this._cleanupOnEnd(src, [src, filter, gain])
         src.start(); src.stop(ctx.currentTime + 0.09)
       } catch (e) {}
     }, 50)
@@ -276,6 +277,7 @@ const AudioManager = {
         gain.gain.setValueAtTime(0.12, ctx.currentTime)
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
         src.connect(filter); filter.connect(gain); gain.connect(ctx.destination)
+        this._cleanupOnEnd(src, [src, filter, gain])
         src.start(); src.stop(ctx.currentTime + 0.36)
       } catch (e) {}
     }, 540)
