@@ -50,6 +50,7 @@ export default class GameScene {
     this._achPopup         = new AchievementUnlockPopup()
     // Header 文字宽度缓存（关卡内文字固定，避免每帧 measureText）
     this._textWidthCache   = new Map()
+    this._gradCache = new Map()
   }
 
   init() {
@@ -77,7 +78,13 @@ export default class GameScene {
     this._sessionShares    = 0
     this._achChecked       = false
     this._achPopup         = new AchievementUnlockPopup()
-    AudioManager.playBGM()
+    this._gradCache.clear()
+    this._bgGrad = null
+    setTimeout(() => {
+      if (this.game.currentScene === this && !this.logic.gameOver && !this.logic.win) {
+        AudioManager.playBGM()
+      }
+    }, 0)
   }
 
   // ========== 自适应布局 ==========
@@ -134,8 +141,8 @@ export default class GameScene {
     if (this._expandAnim  > 0) this._expandAnim--
     if (this._propFlash && this._propFlash.frame > 0) this._propFlash.frame--
 
-    this.floatTexts = this.floatTexts.filter(t => { t.update(); return !t.isDead() })
-    this.particles  = this.particles.filter(p  => { p.update();  return !p.isDead()  })
+    this._updateAnimationList(this.floatTexts)
+    this._updateAnimationList(this.particles)
     if (this.shake > 0) this.shake--
 
     const logic = this.logic
@@ -158,7 +165,7 @@ export default class GameScene {
       }
       // 追踪本关最高连消
       if (logic.combo > this._sessionMaxCombo) this._sessionMaxCombo = logic.combo
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 8 && this.particles.length < 64; i++) {
         this.particles.push(new MatchParticle(cx, cy,
           CONFIG.COLORS[Math.floor(Math.random() * CONFIG.COLORS.length)]))
       }
@@ -177,6 +184,19 @@ export default class GameScene {
     if ((logic.gameOver || logic.win) && !this._resultScheduled) {
       this._resultScheduled = true
       const stars = logic.calcStars()
+      AudioManager.stopBGM()
+      let resultShown = false
+      const showResult = () => {
+        if (resultShown || this.game.currentScene !== this) return
+        resultShown = true
+        if (this._onComplete) {
+          // 每日挑战模式：通过回调返回结果，不走普通 showResult
+          this._onComplete(logic.win, logic.score, logic.carsWon, stars)
+        } else {
+          this.game.showResult(logic.score, logic.carsWon, logic.level, logic.win, stars)
+        }
+      }
+
       if (logic.win) {
         AudioManager.playWin()
         // ── 成就：累积统计并检测 ──
@@ -193,24 +213,30 @@ export default class GameScene {
           saveAchievementStats(stats)
           const newly = checkAndUnlockAchievements(_CFG.ACHIEVEMENTS, stats)
           if (newly.length > 0) {
-            // 延迟1.2秒再弹出庆祝弹窗（让玩家先看到通关动画）
+            // 先展示通关动画，再让成就弹窗接管；关闭弹窗后进入结算页。
             setTimeout(() => {
-              this._achPopup.show(newly)
-            }, 1200)
+              if (this.game.currentScene === this) {
+                this._achPopup.show(newly, showResult)
+              }
+            }, 700)
+            return
           }
         }
       } else {
         AudioManager.playLose()
       }
-      setTimeout(() => {
-        if (this._onComplete) {
-          // 每日挑战模式：通过回调返回结果，不走普通 showResult
-          this._onComplete(logic.win, logic.score, logic.carsWon, stars)
-        } else {
-          this.game.showResult(logic.score, logic.carsWon, logic.level, logic.win, stars)
-        }
-      }, 1000)
+      setTimeout(showResult, 1000)
     }
+  }
+
+  _updateAnimationList(list) {
+    let write = 0
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i]
+      item.update()
+      if (!item.isDead()) list[write++] = item
+    }
+    list.length = write
   }
 
   // ========== 绘制 ==========
@@ -500,12 +526,16 @@ export default class GameScene {
     roundRect(ctx, bx, by, bw, bh, r); ctx.fill()
 
     // 内渐变（轻微明暗变化）
-    const panelG = ctx.createLinearGradient(bx, by, bx, by + bh)
-    panelG.addColorStop(0, 'rgba(255,255,255,0.06)')
-    panelG.addColorStop(1, 'rgba(0,0,0,0.06)')
-    ctx.fillStyle = panelG
+    const panelKey = `grid|panel|${bx}|${by}|${bh}`
+    if (!this._gradCache.has(panelKey)) {
+      const g = ctx.createLinearGradient(bx, by, bx, by + bh)
+      g.addColorStop(0, 'rgba(255,255,255,0.06)')
+      g.addColorStop(1, 'rgba(0,0,0,0.06)')
+      this._gradCache.set(panelKey, g)
+    }
+    ctx.fillStyle = this._gradCache.get(panelKey)
     roundRect(ctx, bx, by, bw, bh, r); ctx.fill()
-  
+
     // 外边框（白色半透明细线）
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'
     ctx.lineWidth   = 1.5
@@ -534,29 +564,49 @@ export default class GameScene {
           ctx.fillStyle = 'rgba(150,215,245,0.22)'
           roundRect(ctx, x, y, sz, sz, 10); ctx.fill()
           // 顶部浅白渐变（玻璃反光）
-          const emptyHg = ctx.createLinearGradient(x, y, x, y + sz * 0.45)
-          emptyHg.addColorStop(0,   'rgba(255,255,255,0.52)')
-          emptyHg.addColorStop(0.6, 'rgba(255,255,255,0.12)')
-          emptyHg.addColorStop(1,   'rgba(255,255,255,0.00)')
-          ctx.fillStyle = emptyHg
+          // 顶部高光
+          const hgKey = `empty|top|${x}|${y}|${sz}`
+          if (!this._gradCache.has(hgKey)) {
+            const g = ctx.createLinearGradient(x, y, x, y + sz * 0.45)
+            g.addColorStop(0,   'rgba(255,255,255,0.52)')
+            g.addColorStop(0.6, 'rgba(255,255,255,0.12)')
+            g.addColorStop(1,   'rgba(255,255,255,0.00)')
+            this._gradCache.set(hgKey, g)
+          }
+          ctx.fillStyle = this._gradCache.get(hgKey)
           roundRect(ctx, x, y, sz, sz * 0.45, { tl:10, tr:10, bl:0, br:0 }); ctx.fill()
+
           // 左侧亮边
-          const emptyL = ctx.createLinearGradient(x, y, x + sz*0.18, y)
-          emptyL.addColorStop(0, 'rgba(255,255,255,0.22)')
-          emptyL.addColorStop(1, 'rgba(255,255,255,0.00)')
-          ctx.fillStyle = emptyL
+          const lKey = `empty|left|${x}|${y}|${sz}`
+          if (!this._gradCache.has(lKey)) {
+            const g = ctx.createLinearGradient(x, y, x + sz*0.18, y)
+            g.addColorStop(0, 'rgba(255,255,255,0.22)')
+            g.addColorStop(1, 'rgba(255,255,255,0.00)')
+            this._gradCache.set(lKey, g)
+          }
+          ctx.fillStyle = this._gradCache.get(lKey)
           roundRect(ctx, x, y, sz*0.18, sz, { tl:10, tr:0, bl:10, br:0 }); ctx.fill()
+
           // 右侧亮边
-          const emptyR = ctx.createLinearGradient(x + sz, y, x + sz - sz*0.14, y)
-          emptyR.addColorStop(0, 'rgba(255,255,255,0.14)')
-          emptyR.addColorStop(1, 'rgba(255,255,255,0.00)')
-          ctx.fillStyle = emptyR
+          const rKey = `empty|right|${x}|${y}|${sz}`
+          if (!this._gradCache.has(rKey)) {
+            const g = ctx.createLinearGradient(x + sz, y, x + sz - sz*0.14, y)
+            g.addColorStop(0, 'rgba(255,255,255,0.14)')
+            g.addColorStop(1, 'rgba(255,255,255,0.00)')
+            this._gradCache.set(rKey, g)
+          }
+          ctx.fillStyle = this._gradCache.get(rKey)
           roundRect(ctx, x + sz - sz*0.14, y, sz*0.14, sz, { tl:0, tr:10, bl:0, br:10 }); ctx.fill()
+
           // 底部反光
-          const emptyB = ctx.createLinearGradient(x, y + sz, x, y + sz - sz*0.18)
-          emptyB.addColorStop(0, 'rgba(255,255,255,0.16)')
-          emptyB.addColorStop(1, 'rgba(255,255,255,0.00)')
-          ctx.fillStyle = emptyB
+          const bKey = `empty|bottom|${x}|${y}|${sz}`
+          if (!this._gradCache.has(bKey)) {
+            const g = ctx.createLinearGradient(x, y + sz, x, y + sz - sz*0.18)
+            g.addColorStop(0, 'rgba(255,255,255,0.16)')
+            g.addColorStop(1, 'rgba(255,255,255,0.00)')
+            this._gradCache.set(bKey, g)
+          }
+          ctx.fillStyle = this._gradCache.get(bKey)
           roundRect(ctx, x, y + sz - sz*0.18, sz, sz*0.18, { tl:0, tr:0, bl:10, br:10 }); ctx.fill()
           // 外细边框：浅蓝白
           ctx.strokeStyle = 'rgba(200,235,255,0.50)'
@@ -584,32 +634,49 @@ export default class GameScene {
         roundRect(ctx, -sz/2, -sz/2, sz, sz, 12); ctx.fill()
 
         // 顶部超亮白色高光（果冻感核心：上45%大面积亮白渐变）
-        const hg = ctx.createLinearGradient(0, -sz/2, 0, -sz/2 + sz * 0.45)
-        hg.addColorStop(0,    'rgba(255,255,255,0.78)')
-        hg.addColorStop(0.45, 'rgba(255,255,255,0.22)')
-        hg.addColorStop(1,    'rgba(255,255,255,0.00)')
-        ctx.fillStyle = hg
+        // 顶部高光（所有格子共享，key 只含 sz）
+        const hgKey = `car|top|${sz}`
+        if (!this._gradCache.has(hgKey)) {
+          const g = ctx.createLinearGradient(0, -sz/2, 0, -sz/2 + sz * 0.45)
+          g.addColorStop(0,    'rgba(255,255,255,0.78)')
+          g.addColorStop(0.45, 'rgba(255,255,255,0.22)')
+          g.addColorStop(1,    'rgba(255,255,255,0.00)')
+          this._gradCache.set(hgKey, g)
+        }
+        ctx.fillStyle = this._gradCache.get(hgKey)
         roundRect(ctx, -sz/2, -sz/2, sz, sz * 0.45, { tl:12, tr:12, bl:0, br:0 }); ctx.fill()
 
         // 左侧亮边（侧光感）
-        const sideG = ctx.createLinearGradient(-sz/2, 0, -sz/2 + sz*0.18, 0)
-        sideG.addColorStop(0, 'rgba(255,255,255,0.28)')
-        sideG.addColorStop(1, 'rgba(255,255,255,0.00)')
-        ctx.fillStyle = sideG
+        const sideGKey = `car|left|${sz}`
+        if (!this._gradCache.has(sideGKey)) {
+          const g = ctx.createLinearGradient(-sz/2, 0, -sz/2 + sz*0.18, 0)
+          g.addColorStop(0, 'rgba(255,255,255,0.28)')
+          g.addColorStop(1, 'rgba(255,255,255,0.00)')
+          this._gradCache.set(sideGKey, g)
+        }
+        ctx.fillStyle = this._gradCache.get(sideGKey)
         roundRect(ctx, -sz/2, -sz/2, sz*0.18, sz, { tl:12, tr:0, bl:12, br:0 }); ctx.fill()
 
         // 右侧亮边（对称侧光）
-        const sideGR = ctx.createLinearGradient(sz/2, 0, sz/2 - sz*0.14, 0)
-        sideGR.addColorStop(0, 'rgba(255,255,255,0.18)')
-        sideGR.addColorStop(1, 'rgba(255,255,255,0.00)')
-        ctx.fillStyle = sideGR
+        const sideGRKey = `car|right|${sz}`
+        if (!this._gradCache.has(sideGRKey)) {
+          const g = ctx.createLinearGradient(sz/2, 0, sz/2 - sz*0.14, 0)
+          g.addColorStop(0, 'rgba(255,255,255,0.18)')
+          g.addColorStop(1, 'rgba(255,255,255,0.00)')
+          this._gradCache.set(sideGRKey, g)
+        }
+        ctx.fillStyle = this._gradCache.get(sideGRKey)
         roundRect(ctx, sz/2 - sz*0.14, -sz/2, sz*0.14, sz, { tl:0, tr:12, bl:0, br:12 }); ctx.fill()
 
         // 底部反光（模拟糖果底部折射，较弱）
-        const botG = ctx.createLinearGradient(0, sz/2, 0, sz/2 - sz*0.18)
-        botG.addColorStop(0, 'rgba(255,255,255,0.22)')
-        botG.addColorStop(1, 'rgba(255,255,255,0.00)')
-        ctx.fillStyle = botG
+        const botGKey = `car|bottom|${sz}`
+        if (!this._gradCache.has(botGKey)) {
+          const g = ctx.createLinearGradient(0, sz/2, 0, sz/2 - sz*0.18)
+          g.addColorStop(0, 'rgba(255,255,255,0.22)')
+          g.addColorStop(1, 'rgba(255,255,255,0.00)')
+          this._gradCache.set(botGKey, g)
+        }
+        ctx.fillStyle = this._gradCache.get(botGKey)
         roundRect(ctx, -sz/2, sz/2 - sz*0.18, sz, sz*0.18, { tl:0, tr:0, bl:12, br:12 }); ctx.fill()
 
         // 车型 emoji
@@ -1290,5 +1357,12 @@ export default class GameScene {
       }
     })
     ctx.restore()
+  }
+
+  destroy() {
+    AudioManager.stopBGM()
+    this.floatTexts.length = 0
+    this.particles.length  = 0
+    this._gradCache.clear()
   }
 }
