@@ -137,6 +137,8 @@ const AudioManager = {
   },
 
   // ========== 内部：多音符序列（开心消消乐核心） ==========
+  // 注意：playWin/playLose 不调用此方法，因为它内部走 _setSfxTimeout，
+  // 会被 stopSFX 截断。胜负音效需要 fire-and-forget，直接用原生 setTimeout。
   _playNotes(notes, interval = 80) {
     // notes: [{freq, dur, vol}]
     notes.forEach((n, i) => {
