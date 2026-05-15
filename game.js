@@ -59,6 +59,7 @@ const Game = {
   // 让 LeaderboardScene 复用此状态，避免重复弹授权窗口
   _privacyOK:  null,
   _rankCache:  null,   // { list, ts } — 排行榜跨场景缓存
+  _lastRenderErrorAt: 0,
 
   init() {
     // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
@@ -152,15 +153,39 @@ const Game = {
     const render = () => {
       // clearRect 用物理像素清全屏
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      if (this.currentScene) {
-        this.currentScene.update()
-        this.currentScene.draw()
+      try {
+        if (this.currentScene) {
+          this.currentScene.update()
+          this.currentScene.draw()
+        }
+      } catch (e) {
+        this._handleRenderError(e)
       }
       // 好友助力 Toast
       this._drawShareToast()
       requestAnimationFrame(render)
     }
     render()
+  },
+
+  _handleRenderError(err) {
+    const now = Date.now()
+    if (now - this._lastRenderErrorAt > 1000) {
+      this._lastRenderErrorAt = now
+      try { console.error('[Game] render failed', err) } catch (e) {}
+    }
+
+    ctx.save()
+    ctx.fillStyle = '#5BC8F5'
+    ctx.fillRect(0, 0, logicWidth, logicHeight)
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'
+    ctx.font = 'bold 18px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('画面加载中', logicWidth / 2, logicHeight / 2 - 12)
+    ctx.font = '13px sans-serif'
+    ctx.fillText('请稍等或返回首页重试', logicWidth / 2, logicHeight / 2 + 18)
+    ctx.restore()
   },
 
   _drawShareToast() {

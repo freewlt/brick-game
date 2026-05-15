@@ -1359,6 +1359,7 @@ export default class GameScene {
 
   destroy() {
     AudioManager.stopBGM()
+    AudioManager.stopSFX()
     this.floatTexts.length = 0
     this.particles.length  = 0
     this._gradCache.clear()

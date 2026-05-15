@@ -25,6 +25,7 @@ export default class ResultScene {
     this.displayCars  = 0
     this.confetti = []
     this._initConfetti()
+    this._allClearTimer = null
     // 机会系统
     this.lives        = 3         // 扣完后的剩余机会
     this._lifeSpent   = false     // 失败只扣一次
@@ -67,7 +68,8 @@ export default class ResultScene {
       this.lives = getLives()
       // 最后一关通关：1.2秒后自动跳到全通关彩蛋页（每日模式不触发）
       if (!isDaily && this.levelIdx >= (CONFIG.LEVELS.length - 1)) {
-        setTimeout(() => {
+        this._allClearTimer = setTimeout(() => {
+          this._allClearTimer = null
           this.game.showAllClear()
         }, 1200)
       }
@@ -447,6 +449,10 @@ export default class ResultScene {
   }
 
   destroy() {
+    if (this._allClearTimer) {
+      clearTimeout(this._allClearTimer)
+      this._allClearTimer = null
+    }
     this.confetti.length = 0
   }
 }

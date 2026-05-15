@@ -7,6 +7,7 @@ const AudioManager = {
   _bgmPlaying: false,
   _bgmTimer: null,
   _bgmNoteTimers: [],   // BGM 循环内每个音符的 setTimeout 句柄，stopBGM 时统一清掉
+  _sfxTimers: [],       // 非 BGM 音效的延迟 timer，切场景时统一清掉
 
   // ========== 初始化 ==========
   init() {
@@ -25,6 +26,21 @@ const AudioManager = {
         }
       }
     } catch (e) {}
+  },
+
+  _setSfxTimeout(fn, delay) {
+    const timer = setTimeout(() => {
+      const idx = this._sfxTimers.indexOf(timer)
+      if (idx !== -1) this._sfxTimers.splice(idx, 1)
+      fn()
+    }, delay)
+    this._sfxTimers.push(timer)
+    return timer
+  },
+
+  stopSFX() {
+    for (const t of this._sfxTimers) clearTimeout(t)
+    this._sfxTimers = []
   },
 
   // ========== 内部：木琴音（marimba 感）==========
@@ -124,7 +140,7 @@ const AudioManager = {
   _playNotes(notes, interval = 80) {
     // notes: [{freq, dur, vol}]
     notes.forEach((n, i) => {
-      setTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * interval)
+      this._setSfxTimeout(() => this._marimba(n.freq, n.dur || 0.22, n.vol || 0.42), i * interval)
     })
   },
 
@@ -138,7 +154,7 @@ const AudioManager = {
   // 车块入槽：稍高的木琴"叮"+ 气泡
   playInsert() {
     this._marimba(659, 0.18, 0.38)   // E5
-    setTimeout(() => this._pop(0.15), 60)
+    this._setSfxTimeout(() => this._pop(0.15), 60)
   },
 
   // 消除成功：开心消消乐经典三连上扬音 do-mi-sol
@@ -150,11 +166,11 @@ const AudioManager = {
       { freq: 784, dur: 0.30, vol: 0.48 },  // G5
     ], 90)
     // 最后加一个小铃声收尾
-    setTimeout(() => this._bell(1047, 0.5, 0.22), 280)  // C6 铃声
+    this._setSfxTimeout(() => this._bell(1047, 0.5, 0.22), 280)  // C6 铃声
     // 气泡破裂感
-    setTimeout(() => this._pop(0.2), 40)
-    setTimeout(() => this._pop(0.18), 120)
-    setTimeout(() => this._pop(0.15), 200)
+    this._setSfxTimeout(() => this._pop(0.2), 40)
+    this._setSfxTimeout(() => this._pop(0.18), 120)
+    this._setSfxTimeout(() => this._pop(0.15), 200)
   },
 
   // 连消：级数越高音调越高，开心消消乐风格的欢呼上升
@@ -170,16 +186,16 @@ const AudioManager = {
     const freqs = scales[Math.max(0, idx)]
 
     freqs.forEach((freq, i) => {
-      setTimeout(() => {
+      this._setSfxTimeout(() => {
         this._marimba(freq, 0.22, 0.42 + i * 0.04)
       }, i * 75)
     })
     // 收尾铃声 + 扫频
-    setTimeout(() => this._bell(freqs[freqs.length - 1] * 1.5, 0.6, 0.25), freqs.length * 75 + 20)
-    setTimeout(() => this._sweep(freqs[freqs.length - 1], freqs[freqs.length - 1] * 2, 'sine', 0.3, 0.2), freqs.length * 75 + 80)
+    this._setSfxTimeout(() => this._bell(freqs[freqs.length - 1] * 1.5, 0.6, 0.25), freqs.length * 75 + 20)
+    this._setSfxTimeout(() => this._sweep(freqs[freqs.length - 1], freqs[freqs.length - 1] * 2, 'sine', 0.3, 0.2), freqs.length * 75 + 80)
     // 连消气泡
     for (let i = 0; i < Math.min(comboCount, 5); i++) {
-      setTimeout(() => this._pop(0.18), i * 55 + 30)
+      this._setSfxTimeout(() => this._pop(0.18), i * 55 + 30)
     }
   },
 
@@ -197,9 +213,9 @@ const AudioManager = {
   // 槽位满：低沉警告双击，开心消消乐中的危险提示音
   playSlotFull() {
     this._marimba(196, 0.12, 0.4)   // G3 低音
-    setTimeout(() => this._marimba(185, 0.15, 0.45), 110)  // 略低
+    this._setSfxTimeout(() => this._marimba(185, 0.15, 0.45), 110)  // 略低
     // 噪声震动感
-    setTimeout(() => {
+    this._setSfxTimeout(() => {
       if (!this._enabled || !this._ctx) return
       try {
         const ctx = this._ctx
@@ -224,7 +240,7 @@ const AudioManager = {
   // 被遮挡点击：轻柔的"嗯"提示，开心消消乐中点到锁住方块的反馈
   playBlocked() {
     this._marimba(330, 0.1, 0.22)   // E4，低调短促
-    setTimeout(() => this._marimba(294, 0.12, 0.18), 70)   // D4
+    this._setSfxTimeout(() => this._marimba(294, 0.12, 0.18), 70)   // D4
   },
 
   // 关卡通关：开心消消乐经典胜利旋律（快速上扬+铃声收尾）
@@ -240,11 +256,11 @@ const AudioManager = {
     ]
     this._playNotes(notes, 95)
     // 铃声叠加，营造庆祝感
-    setTimeout(() => this._bell(2093, 0.7, 0.28), 480)  // C7 高铃
-    setTimeout(() => this._bell(1568, 0.9, 0.22), 560)  // G6 铃
+    this._setSfxTimeout(() => this._bell(2093, 0.7, 0.28), 480)  // C7 高铃
+    this._setSfxTimeout(() => this._bell(1568, 0.9, 0.22), 560)  // G6 铃
     // 气泡连串
     for (let i = 0; i < 6; i++) {
-      setTimeout(() => this._pop(0.15 + Math.random() * 0.1), i * 80 + 50)
+      this._setSfxTimeout(() => this._pop(0.15 + Math.random() * 0.1), i * 80 + 50)
     }
   },
 
@@ -259,9 +275,9 @@ const AudioManager = {
     ]
     this._playNotes(notes, 130)
     // 结尾加一个低沉滑落
-    setTimeout(() => this._sweep(220, 130, 'triangle', 0.35, 0.2), 520)
+    this._setSfxTimeout(() => this._sweep(220, 130, 'triangle', 0.35, 0.2), 520)
     // 低频噪声，增加"沮丧"质感
-    setTimeout(() => {
+    this._setSfxTimeout(() => {
       if (!this._enabled || !this._ctx) return
       try {
         const ctx = this._ctx
@@ -352,7 +368,7 @@ const AudioManager = {
       // 开启：先改状态，再播音效 + BGM
       this._enabled = true
       this._sweep(400, 800, 'sine', 0.15, 0.3)         // 上扬滑音表示"开"
-      setTimeout(() => this._bell(1047, 0.35, 0.25), 120)
+      this._setSfxTimeout(() => this._bell(1047, 0.35, 0.25), 120)
       this.playBGM()
     } else {
       // 关闭：先播音效（此时 _enabled 还是 true，能正常播放）

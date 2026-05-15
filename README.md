@@ -118,7 +118,8 @@ brick-game/
     │   ├── AllClearScene.js  # 全通关彩蛋页（烟花特效、庆典动画）
     │   ├── AchievementScene.js # 成就墙（可滚动列表，解锁/未解锁状态展示）
     │   ├── LeaderboardScene.js # 好友排行榜
-    │   └── SettingsScene.js  # 设置页（音效开关、游戏信息）
+    │   ├── SettingsScene.js  # 设置页（音效开关、游戏信息）
+    │   └── DailyScene.js     # 每日挑战页（固定种子关卡、连胜记录）
     └── utils/
         ├── draw.js           # roundRect 等绘图工具
         ├── storage.js        # 机会系统、排行榜、分享逻辑、成就持久化
@@ -130,11 +131,11 @@ brick-game/
 
 ## 技术实现
 
-- **渲染**：微信小游戏 Canvas 2D API，纯 JS 手写渲染循环（`requestAnimationFrame`）
-- **高清适配**：读取 `devicePixelRatio`，Canvas 物理像素 = 逻辑尺寸 × DPR，ctx 整体 scale 缩放
+- **渲染**：微信小游戏 Canvas 2D API，纯 JS 手写渲染循环（`requestAnimationFrame`），渲染异常会进入兜底画面，避免直接黑屏卡死
+- **高清适配**：读取 `devicePixelRatio`，Canvas 物理像素 = 逻辑尺寸 × DPR，ctx 整体 scale 缩放；DPR 封顶到 2，降低高清设备显存压力
 - **动态安全区**：`safeTop` 通过 `wx.getWindowInfo().statusBarHeight + 44` 动态计算，适配刘海屏、安卓各机型，不再硬编码 88px
-- **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene 七个场景类，通过 `Game.currentScene` 切换
-- **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等，音效开关状态持久化
+- **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene / DailyScene 八个场景类，通过 `_switchScene()` 切换，并在旧场景 `destroy()` 中释放动画、渐变缓存和音频资源
+- **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等；音频节点结束后主动断开，非 BGM 音效延迟任务可在场景销毁时清理
 - **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
 - **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
@@ -160,6 +161,15 @@ brick-game/
 ---
 
 ## 更新日志
+
+### v1.5.1（2026-05-15）
+- **稳定性** 渲染循环增加异常兜底，场景绘制异常时显示加载提示，减少点击开始后黑屏或闪退体感
+- **稳定性** 场景切换统一走 `_switchScene()`，旧场景通过 `destroy()` 清理动画数组、渐变缓存、BGM 和短音效定时器
+- **稳定性** `ResultScene` 清理全通关自动跳转 timer，避免离开结算页后旧回调继续持有场景
+- **性能** 棋盘与玻璃卡片渐变改为缓存复用，保留原有渐变视觉，同时减少每帧 `CanvasGradient` 分配
+- **性能** Canvas DPR 封顶到 2、动画数组原地清理、消除粒子数量和总量封顶，降低长时间游玩内存压力
+- **音频** 移除木琴短噪声 buffer，音频节点播放结束后主动 `disconnect()`；保留点击、入槽、消除、胜负等主音效反馈
+- **验证** `npm test` 通过：5 个测试文件、66 个测试用例
 
 ### v1.5.0（2026-05-14）
 - **修复** 通关后退出结算页，下次从首页进入直接进下一关（原来仍进当前关）
