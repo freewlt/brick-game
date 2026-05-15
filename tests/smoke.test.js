@@ -39,6 +39,8 @@ describe('Scene destroy 接口约定', () => {
   })
 })
 
+// NOTE: game.js 依赖 wx 全局和模块级 ctx/canvas，无法在 Node 环境导入。
+// 以下测试用内联 replica 验证逻辑契约，不提供 game.js 的回归保护。
 describe('Game._handleRenderError 恢复逻辑', () => {
   it('首次调用后 _renderErrorRecoveryTimer 非 null', () => {
     const game = {
