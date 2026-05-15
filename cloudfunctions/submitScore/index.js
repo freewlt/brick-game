@@ -4,7 +4,8 @@ const db = cloud.database()
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
-  const { nickname, avatarUrl, levelsPassed } = event
+  const { nickname, avatarUrl } = event
+  const levelsPassed = Math.min(Math.max(parseInt(event.levelsPassed) || 0, 0), 30)
 
   const col = db.collection('leaderboard')
   const existing = await col.where({ _openid: OPENID }).get()
