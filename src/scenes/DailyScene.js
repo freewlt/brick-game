@@ -64,6 +64,8 @@ export default class DailyScene {
     // 成就弹窗（通关后短暂展示）
     this._newAchievements = []
     this._achFrame        = 0
+    this._bgGrad          = null  // 背景渐变缓存
+    this._navGrad         = null  // 导航栏渐变缓存
   }
 
   init() {
@@ -103,21 +105,25 @@ export default class DailyScene {
     const padX       = 16
 
     // ── 背景：天蓝渐变 ──
-    const bg = ctx.createLinearGradient(0, 0, 0, H)
-    bg.addColorStop(0,    '#5BC8F5')
-    bg.addColorStop(0.42, '#7DD6F8')
-    bg.addColorStop(0.72, '#A8E6FF')
-    bg.addColorStop(1,    '#C5F0FF')
-    ctx.fillStyle = bg
+    if (!this._bgGrad) {
+      this._bgGrad = ctx.createLinearGradient(0, 0, 0, H)
+      this._bgGrad.addColorStop(0,    '#5BC8F5')
+      this._bgGrad.addColorStop(0.42, '#7DD6F8')
+      this._bgGrad.addColorStop(0.72, '#A8E6FF')
+      this._bgGrad.addColorStop(1,    '#C5F0FF')
+    }
+    ctx.fillStyle = this._bgGrad
     ctx.fillRect(0, 0, W, H)
 
     // ── 顶部导航栏 ──
     const navH  = safeTop + 10
-    const navBg = ctx.createLinearGradient(0, 0, 0, navH)
-    navBg.addColorStop(0, 'rgba(91,200,245,0.97)')
-    navBg.addColorStop(1, 'rgba(91,200,245,0.85)')
+    if (!this._navGrad) {
+      this._navGrad = ctx.createLinearGradient(0, 0, 0, navH)
+      this._navGrad.addColorStop(0, 'rgba(91,200,245,0.97)')
+      this._navGrad.addColorStop(1, 'rgba(91,200,245,0.85)')
+    }
     ctx.save()
-    ctx.fillStyle = navBg
+    ctx.fillStyle = this._navGrad
     ctx.fillRect(0, 0, W, navH)
     ctx.restore()
 
