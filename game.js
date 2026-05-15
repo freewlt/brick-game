@@ -60,11 +60,12 @@ const Game = {
   _privacyOK:  null,
   _rankCache:  null,   // { list, ts } — 排行榜跨场景缓存
   _lastRenderErrorAt: 0,
+  _renderErrorRecoveryTimer: null,
 
   init() {
     // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
     if (typeof wx !== 'undefined' && wx.cloud) {
-      wx.cloud.init({ env: 'your-env-id', traceUser: true })
+      wx.cloud.init({ env: 'cloud1-d5gc1kjfu38bc0a22', traceUser: true })
     }
 
     // 初始化音效系统（创建 WebAudioContext）
@@ -175,6 +176,13 @@ const Game = {
       try { console.error('[Game] render failed', err) } catch (e) {}
     }
 
+    if (this._renderErrorRecoveryTimer === null) {
+      this._renderErrorRecoveryTimer = setTimeout(() => {
+        this._renderErrorRecoveryTimer = null
+        this.showStart()
+      }, 2000)
+    }
+
     ctx.save()
     ctx.fillStyle = '#5BC8F5'
     ctx.fillRect(0, 0, logicWidth, logicHeight)
@@ -182,9 +190,9 @@ const Game = {
     ctx.font = 'bold 18px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('画面加载中', logicWidth / 2, logicHeight / 2 - 12)
+    ctx.fillText('画面异常，即将返回首页', logicWidth / 2, logicHeight / 2 - 12)
     ctx.font = '13px sans-serif'
-    ctx.fillText('请稍等或返回首页重试', logicWidth / 2, logicHeight / 2 + 18)
+    ctx.fillText('或点击屏幕立即返回', logicWidth / 2, logicHeight / 2 + 18)
     ctx.restore()
   },
 
@@ -225,6 +233,12 @@ const Game = {
     // ✅ 触摸坐标是逻辑px，与绘图坐标系完全一致，无需换算
     wx.onTouchStart((e) => {
       const touch = e.touches[0]
+      if (this._renderErrorRecoveryTimer) {
+        clearTimeout(this._renderErrorRecoveryTimer)
+        this._renderErrorRecoveryTimer = null
+        this.showStart()
+        return
+      }
       if (this.currentScene && this.currentScene.onTouchStart) {
         this.currentScene.onTouchStart(touch.clientX, touch.clientY)
       }

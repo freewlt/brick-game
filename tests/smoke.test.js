@@ -38,3 +38,49 @@ describe('Scene destroy 接口约定', () => {
     expect(s._destroyed).toBe(true)
   })
 })
+
+describe('Game._handleRenderError 恢复逻辑', () => {
+  it('首次调用后 _renderErrorRecoveryTimer 非 null', () => {
+    const game = {
+      _lastRenderErrorAt: 0,
+      _renderErrorRecoveryTimer: null,
+      showStart() { this._startShown = true },
+      _handleRenderError(err) {
+        const now = Date.now()
+        if (now - this._lastRenderErrorAt > 1000) {
+          this._lastRenderErrorAt = now
+        }
+        if (this._renderErrorRecoveryTimer === null) {
+          this._renderErrorRecoveryTimer = setTimeout(() => {
+            this._renderErrorRecoveryTimer = null
+            this.showStart()
+          }, 2000)
+        }
+      },
+    }
+    game._handleRenderError(new Error('test'))
+    expect(game._renderErrorRecoveryTimer).not.toBeNull()
+    clearTimeout(game._renderErrorRecoveryTimer)
+  })
+
+  it('重复调用不重置 timer（只调度一次）', () => {
+    const game = {
+      _lastRenderErrorAt: 0,
+      _renderErrorRecoveryTimer: null,
+      showStart() {},
+      _handleRenderError(err) {
+        if (this._renderErrorRecoveryTimer === null) {
+          this._renderErrorRecoveryTimer = setTimeout(() => {
+            this._renderErrorRecoveryTimer = null
+            this.showStart()
+          }, 2000)
+        }
+      },
+    }
+    game._handleRenderError(new Error('a'))
+    const first = game._renderErrorRecoveryTimer
+    game._handleRenderError(new Error('b'))
+    expect(game._renderErrorRecoveryTimer).toBe(first)
+    clearTimeout(first)
+  })
+})
