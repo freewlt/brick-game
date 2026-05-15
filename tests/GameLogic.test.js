@@ -207,6 +207,17 @@ describe('GameLogic', () => {
       g.shuffleLeft = 0
       expect(g.useShuffle()).toBe('empty')
     })
+
+    it('每日挑战模式：洗牌后每格堆叠不超过 customCfg.layerMax', () => {
+      const customCfg = { carTypes: 6, layerMax: 4, setCount: 5, maxMoves: 100 }
+      g.initLevel(0, customCfg)
+      expect(g.useShuffle()).toBe('ok')
+      for (const row of g.board) {
+        for (const stack of row) {
+          expect(stack.length).toBeLessThanOrEqual(customCfg.layerMax)
+        }
+      }
+    })
   })
 
   describe('calcStars', () => {

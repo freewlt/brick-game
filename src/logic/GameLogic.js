@@ -32,6 +32,7 @@ export default class GameLogic {
     // ⑤ 每列「最高有车的行号」缓存：-1 表示该列全空
     // isBlocked 查这个就 O(1)；棋盘整体变动后调 _recomputeColTops 重算
     this._colTopRow    = new Array(CONFIG.BOARD_COLS).fill(-1)
+    this._cfg          = null
   }
 
   // ========== 关卡初始化 ==========
@@ -41,6 +42,7 @@ export default class GameLogic {
     this.level = levelIdx
     const cfg = customCfg || CONFIG.LEVELS[Math.min(levelIdx, CONFIG.LEVELS.length - 1)]
     this.maxMoves = cfg.maxMoves || 0
+    this._cfg = cfg
     this.undoLeft = 1
 
     // 每关固定配发 + Storage 里的额外存量
@@ -241,9 +243,8 @@ export default class GameLogic {
 
     this._shuffle(allCars)
 
-    // 重新铺放（遵循当前关卡 layerMax）
-    const cfg      = CONFIG.LEVELS[Math.min(this.level, CONFIG.LEVELS.length - 1)]
-    const layerMax = cfg.layerMax
+    // 重新铺放（遵循当前关卡 layerMax，每日挑战用 customCfg）
+    const layerMax = this._cfg.layerMax
     const positions = []
     for (let r = 0; r < CONFIG.BOARD_ROWS; r++)
       for (let c = 0; c < CONFIG.BOARD_COLS; c++)
