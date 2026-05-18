@@ -16,10 +16,10 @@ describe('GameLogic', () => {
       expect(g.gameOver).toBe(false)
     })
 
-    it('第 10 关：8 车型 × 4 组 × 3 块 = 96 辆，maxMoves=120', () => {
+    it('第 10 关：7 车型 × 4 组 × 3 块 = 84 辆，maxMoves=118', () => {
       g.initLevel(9)
-      expect(g.totalCars).toBe(96)
-      expect(g.maxMoves).toBe(120)
+      expect(g.totalCars).toBe(84)
+      expect(g.maxMoves).toBe(118)
     })
 
     it('超出关卡数兜底取最后一关', () => {

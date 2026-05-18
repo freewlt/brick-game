@@ -45,65 +45,45 @@ export const CONFIG = {
   // setCount: 每种车放几组（每组=MATCH_COUNT张），总块数 = carTypes × setCount × MATCH_COUNT
   // maxMoves: 本关最多可操作步数（超出即失败），0=不限步数
   // 步均容差 = maxMoves / (carTypes * setCount)，越低越难，建议 1.15~1.7
-  LEVELS: (() => {
-    // ── 手工精调的前10关（入门曲线）──
-    const hand = [
-      { carTypes: 3, layerMax: 2, setCount: 3, maxMoves: 45 },  // 1：27辆，步均1.67，轻松入门
-      { carTypes: 4, layerMax: 2, setCount: 3, maxMoves: 50 },  // 2：36辆，步均1.39
-      { carTypes: 4, layerMax: 3, setCount: 3, maxMoves: 52 },  // 3：36辆，加3层堆叠
-      { carTypes: 5, layerMax: 2, setCount: 3, maxMoves: 52 },  // 4：45辆，步均1.16
-      { carTypes: 5, layerMax: 3, setCount: 3, maxMoves: 56 },  // 5：45辆，3层堆叠
-      { carTypes: 5, layerMax: 3, setCount: 4, maxMoves: 75 },  // 6：60辆，步均1.25
-      { carTypes: 6, layerMax: 3, setCount: 3, maxMoves: 68 },  // 7：54辆，步均1.26
-      { carTypes: 6, layerMax: 3, setCount: 4, maxMoves: 90 },  // 8：72辆，步均1.25
-      { carTypes: 7, layerMax: 3, setCount: 4, maxMoves: 103 }, // 9：84辆，步均1.23
-      { carTypes: 8, layerMax: 3, setCount: 4, maxMoves: 120 }, // 10：96辆，步均1.25，高难
-    ]
+  LEVELS: [
+    // ── 第一段：轻松入门（1-6 关）AI 通关率 87-100% ──
+    { carTypes: 3, layerMax: 2, setCount: 3, maxMoves:  45 }, // 1：27辆 密0.55 步均1.67
+    { carTypes: 4, layerMax: 2, setCount: 3, maxMoves:  50 }, // 2：36辆 密0.73 步均1.39
+    { carTypes: 4, layerMax: 3, setCount: 3, maxMoves:  52 }, // 3：36辆 密0.73 步均1.44
+    { carTypes: 5, layerMax: 2, setCount: 3, maxMoves:  52 }, // 4：45辆 密0.92 步均1.16
+    { carTypes: 5, layerMax: 3, setCount: 3, maxMoves:  56 }, // 5：45辆 密0.92 步均1.24
+    { carTypes: 5, layerMax: 3, setCount: 4, maxMoves:  75 }, // 6：60辆 密1.22 步均1.25
 
-    // ── 算法生成第11~30关（难度持续爬升）──
-    // 分3个阶段：进阶(11-16) / 硬核(17-23) / 地狱(24-30)
-    const generated = []
+    // ── 第二段：第一道门槛（7-10 关）AI 通关率 10-52% ──
+    { carTypes: 6, layerMax: 2, setCount: 3, maxMoves:  72 }, // 7：54辆 密1.10 步均1.33
+    { carTypes: 6, layerMax: 3, setCount: 3, maxMoves:  75 }, // 8：54辆 密1.10 步均1.39
+    { carTypes: 7, layerMax: 3, setCount: 3, maxMoves:  88 }, // 9：63辆 密1.29 步均1.40
+    { carTypes: 7, layerMax: 3, setCount: 4, maxMoves: 118 }, // 10：84辆 密1.71 步均1.40
 
-    // 阶段一：进阶（11-16）carTypes 5-7，layerMax 3，setCount 4-5，步均 1.18~1.22
-    const phase1 = [
-      { carTypes: 5, layerMax: 3, setCount: 5, ratio: 1.22 },
-      { carTypes: 6, layerMax: 3, setCount: 5, ratio: 1.20 },
-      { carTypes: 6, layerMax: 4, setCount: 4, ratio: 1.20 },
-      { carTypes: 7, layerMax: 3, setCount: 5, ratio: 1.19 },
-      { carTypes: 7, layerMax: 4, setCount: 4, ratio: 1.19 },
-      { carTypes: 8, layerMax: 3, setCount: 5, ratio: 1.18 },
-    ]
+    // ── 第三段：进阶（11-20 关）AI 通关率 0-38%，喘息-挑战交替 ──
+    { carTypes: 6, layerMax: 3, setCount: 4, maxMoves: 100 }, // 11：72辆 密1.47 喘息
+    { carTypes: 7, layerMax: 3, setCount: 3, maxMoves:  92 }, // 12：63辆 密1.29 喘息
+    { carTypes: 7, layerMax: 3, setCount: 4, maxMoves: 118 }, // 13：84辆 密1.71 挑战
+    { carTypes: 8, layerMax: 3, setCount: 3, maxMoves: 108 }, // 14：72辆 密1.47 挑战（8种车型首次）
+    { carTypes: 8, layerMax: 3, setCount: 4, maxMoves: 140 }, // 15：96辆 密1.96 极限
+    { carTypes: 7, layerMax: 4, setCount: 3, maxMoves:  92 }, // 16：63辆 密1.29 喘息
+    { carTypes: 7, layerMax: 4, setCount: 4, maxMoves: 122 }, // 17：84辆 密1.71 挑战
+    { carTypes: 8, layerMax: 4, setCount: 3, maxMoves: 110 }, // 18：72辆 密1.47 挑战
+    { carTypes: 8, layerMax: 4, setCount: 4, maxMoves: 142 }, // 19：96辆 密1.96 极限
+    { carTypes: 8, layerMax: 4, setCount: 4, maxMoves: 138 }, // 20：96辆 密1.96 极限
 
-    // 阶段二：硬核（17-23）carTypes 6-8，layerMax 4，setCount 5，步均 1.16~1.18
-    const phase2 = [
-      { carTypes: 6, layerMax: 4, setCount: 5, ratio: 1.18 },
-      { carTypes: 7, layerMax: 4, setCount: 5, ratio: 1.17 },
-      { carTypes: 7, layerMax: 4, setCount: 6, ratio: 1.17 },
-      { carTypes: 8, layerMax: 4, setCount: 5, ratio: 1.17 },
-      { carTypes: 8, layerMax: 4, setCount: 6, ratio: 1.16 },
-      { carTypes: 8, layerMax: 4, setCount: 6, ratio: 1.16 },
-      { carTypes: 8, layerMax: 4, setCount: 7, ratio: 1.16 },
-    ]
-
-    // 阶段三：地狱（24-30）carTypes 8，layerMax 4-5，setCount 7-8，步均 1.15
-    const phase3 = [
-      { carTypes: 8, layerMax: 5, setCount: 6, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 7, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 7, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 8, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 8, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 8, ratio: 1.15 },
-      { carTypes: 8, layerMax: 5, setCount: 8, ratio: 1.15 },
-    ]
-
-    for (const p of [...phase1, ...phase2, ...phase3]) {
-      // maxMoves = ceil(carTypes × setCount × ratio)，确保是整数
-      const maxMoves = Math.ceil(p.carTypes * p.setCount * p.ratio)
-      generated.push({ carTypes: p.carTypes, layerMax: p.layerMax, setCount: p.setCount, maxMoves })
-    }
-
-    return [...hand, ...generated]
-  })(),
+    // ── 第四段：极难（21-30 关）AI 通关率 0%，人类高手配合道具约 5-15% ──
+    { carTypes: 8, layerMax: 4, setCount: 5, maxMoves: 172 }, // 21：120辆 密2.45
+    { carTypes: 8, layerMax: 4, setCount: 5, maxMoves: 168 }, // 22：120辆 密2.45
+    { carTypes: 8, layerMax: 5, setCount: 4, maxMoves: 142 }, // 23：96辆  密1.96
+    { carTypes: 8, layerMax: 5, setCount: 5, maxMoves: 172 }, // 24：120辆 密2.45
+    { carTypes: 8, layerMax: 5, setCount: 5, maxMoves: 168 }, // 25：120辆 密2.45
+    { carTypes: 8, layerMax: 5, setCount: 5, maxMoves: 165 }, // 26：120辆 密2.45
+    { carTypes: 8, layerMax: 5, setCount: 6, maxMoves: 200 }, // 27：144辆 密2.94
+    { carTypes: 8, layerMax: 5, setCount: 6, maxMoves: 196 }, // 28：144辆 密2.94
+    { carTypes: 8, layerMax: 5, setCount: 6, maxMoves: 192 }, // 29：144辆 密2.94
+    { carTypes: 8, layerMax: 5, setCount: 7, maxMoves: 228 }, // 30：168辆 密3.43
+  ],
 
   // 积分
   SCORE_PER_MATCH: 100,
