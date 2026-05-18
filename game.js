@@ -8,8 +8,13 @@ import AllClearScene    from './src/scenes/AllClearScene.js'
 import AchievementScene from './src/scenes/AchievementScene.js'
 import DailyScene       from './src/scenes/DailyScene.js'
 import { handleShareEntry, saveLevelProgress, saveMyUserInfo, loadCloudProgress } from './src/utils/storage.js'
-import { auth, userInfo } from './src/utils/wxApi.js'
+import { auth, userInfo, getEnvPrefix } from './src/utils/wxApi.js'
 import AudioManager     from './src/utils/audio.js'
+
+// 'develop' | 'trial' | 'release'
+let _envVersion = 'release'
+try { _envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release' } catch (e) {}
+export const envVersion = _envVersion
 
 const canvas = wx.createCanvas()
 const ctx = canvas.getContext('2d')
@@ -65,7 +70,7 @@ const Game = {
   init() {
     // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
     if (typeof wx !== 'undefined' && wx.cloud) {
-      wx.cloud.init({ env: 'cloud1-d5gc1kjfu38bc0a22', traceUser: true })
+      wx.cloud.init({ env: 'YOUR_ENV_ID', traceUser: true })
     }
 
     // 初始化音效系统（创建 WebAudioContext）

@@ -1,9 +1,9 @@
 {
-  "deviceOrientation": "portrait",
-  "networkTimeout": {
-    "request": 5000
-  },
-  "subpackages": [],
-  "__usePrivacyCheck__": true,
-  "cloud": true
+    "deviceOrientation": "portrait",
+    "networkTimeout": {
+        "request": 5000
+    },
+    "subpackages": [],
+    "__usePrivacyCheck__": true,
+    "cloud": true
 }
