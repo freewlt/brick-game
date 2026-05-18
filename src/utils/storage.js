@@ -121,7 +121,7 @@ function saveProgress(levelsPassed) {
     nickname:     myInfo.nickname  || '玩家',
     avatarUrl:    myInfo.avatarUrl || '',
     levelsPassed,
-  })
+  }, null, (e) => { console.error('[leaderboard] submitScore failed:', e) })
 }
 
 // 读取本地缓存的自己通关数
