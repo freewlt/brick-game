@@ -4,9 +4,9 @@
 
 **Goal:** 将关卡进度从纯本地存储升级为云端同步，解决换设备进度归零和开发/体验/正式版进度互相污染两个问题。
 
-**Architecture:** 新增云函数 `syncProgress`（读写合一）；`wxApi.js` 新增 `getEnvPrefix()` 工具函数；`storage.js` 的本地 key 加环境前缀，`saveLevelProgress` 追加异步云端写，新增 `loadCloudProgress` 供启动时从云端恢复进度；`game.js` 在 `init()` 里调用一次 `loadCloudProgress`。
+**Architecture:** 新增云函数 `syncProgress`（读写合一）；`wxApi.js` 新增 `getEnvPrefix()` 工具函数；`storage.js` 的本地 key 加环境前缀，`saveLevelProgress` 追加异步云端写，新增 `loadCloudProgress` 供启动时从云端恢复进度；`game.js` 在 `init()` 里调用一次 `loadCloudProgress`。开发版、体验版、正式版共用同一套云函数时，`cloud.DYNAMIC_CURRENT_ENV` 不会按版本自动隔离数据；客户端需要传 `envVersion`，云函数按 `develop → leaderboard_dev`、`trial → leaderboard_trial`、`release → leaderboard` 路由集合。
 
-**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（复用 `leaderboard` 集合），Vitest
+**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（`leaderboard` / `leaderboard_trial` / `leaderboard_dev`），Vitest
 
 ---
 
@@ -34,7 +34,7 @@ exports.main = async (event) => {
 
   if (action === 'save') {
     const levelProgress = Math.min(Math.max(parseInt(event.levelProgress) || 0, 0), 29)
-    const col = db.collection('leaderboard')
+    const col = db.collection(getLeaderboardCollectionName(event.envVersion))
     const existing = await col.where({ _openid: OPENID }).get()
     if (existing.data.length === 0) {
       await col.add({ data: { _openid: OPENID, levelProgress, updatedAt: Date.now() } })
@@ -48,7 +48,7 @@ exports.main = async (event) => {
   }
 
   if (action === 'load') {
-    const col = db.collection('leaderboard')
+    const col = db.collection(getLeaderboardCollectionName(event.envVersion))
     const existing = await col.where({ _openid: OPENID }).get()
     if (existing.data.length === 0) return { levelProgress: null }
     const val = existing.data[0].levelProgress
@@ -314,7 +314,7 @@ function saveLevelProgress(levelIdx) {
 // 同时异步同步到云端（fire-and-forget，失败静默）
 function saveLevelProgress(levelIdx) {
   storage.set(LEVEL_PROGRESS_KEY, levelIdx)
-  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx })
+  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx, envVersion: ENV_VERSION })
 }
 ```
 
@@ -326,7 +326,7 @@ function saveLevelProgress(levelIdx) {
 // 从云端读取进度，成功则用云端值覆盖本地（取较大值）
 // onDone(levelIdx) 在读取完成后调用；云端返回 null 或失败时静默不调用
 function loadCloudProgress(onDone) {
-  cloud.call('syncProgress', { action: 'load' }, (result) => {
+  cloud.call('syncProgress', { action: 'load', envVersion: ENV_VERSION }, (result) => {
     const remote = result && typeof result.levelProgress === 'number'
       ? result.levelProgress
       : null
@@ -439,4 +439,5 @@ git commit -m "feat(game): call loadCloudProgress on init to restore progress fr
 
 1. 右键 `cloudfunctions/syncProgress` 文件夹
 2. 选择「上传并部署：云端安装依赖」
-3. 部署完成后，开发版/体验版/正式版均可调用（`cloud.DYNAMIC_CURRENT_ENV` 自动路由到对应环境）
+3. 部署完成后，开发版/体验版/正式版均可调用同一套云函数；数据隔离依赖客户端传入的 `envVersion`，不是 `cloud.DYNAMIC_CURRENT_ENV` 自动完成
+4. 在云开发控制台确认已创建 `leaderboard`、`leaderboard_trial`、`leaderboard_dev` 三个集合

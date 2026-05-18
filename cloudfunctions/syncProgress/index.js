@@ -5,7 +5,9 @@ const db = cloud.database()
 function getLeaderboardCollectionName(envVersion) {
   if (envVersion === 'develop') return 'leaderboard_dev'
   if (envVersion === 'trial') return 'leaderboard_trial'
+  if (envVersion === 'release') return 'leaderboard'
   if (!envVersion) console.warn('[syncProgress] missing envVersion, fallback to leaderboard')
+  else console.warn(`[syncProgress] unknown envVersion "${envVersion}", fallback to leaderboard`)
   return 'leaderboard'
 }
 

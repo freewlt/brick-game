@@ -2,15 +2,15 @@
 
 **目标：** 将关卡进度（resume-point）从纯本地存储升级为云端同步，解决两个问题：换设备进度归零；开发/体验/正式版共用同一本地 key 导致进度互相污染。
 
-**架构：** 三处独立改动——新增云函数 `syncProgress`（读写合一）；`wxApi.js` 加 `cloud.call` 封装；`storage.js` 的 `saveLevelProgress` / `getLevelProgress` 改为云端优先、本地兜底，并加环境前缀隔离本地 key。
+**架构：** 三处独立改动——新增云函数 `syncProgress`（读写合一）；`wxApi.js` 加 `cloud.call` 封装；`storage.js` 的 `saveLevelProgress` / `getLevelProgress` 改为云端优先、本地兜底，并加环境前缀隔离本地 key。开发版、体验版、正式版调用同一套云函数和同一云环境，因此云端数据隔离不能依赖 `cloud.DYNAMIC_CURRENT_ENV`；客户端必须传 `envVersion`，云函数按 `develop → leaderboard_dev`、`trial → leaderboard_trial`、`release → leaderboard` 路由集合。
 
-**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（复用 `leaderboard` 集合），Vitest
+**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（`leaderboard` / `leaderboard_trial` / `leaderboard_dev`），Vitest
 
 ---
 
 ## 数据模型
 
-复用现有 `leaderboard` 集合，在每条记录新增 `levelProgress` 字段，不新建集合。
+正式版复用现有 `leaderboard` 集合，在每条记录新增 `levelProgress` 字段；体验版和开发版分别使用 `leaderboard_trial`、`leaderboard_dev`，避免测试数据污染正式榜。
 
 ```
 leaderboard 文档（新增字段）：
@@ -47,7 +47,7 @@ exports.main = async (event) => {
 
   if (action === 'save') {
     const levelProgress = Math.min(Math.max(parseInt(event.levelProgress) || 0, 0), 29)
-    const col = db.collection('leaderboard')
+    const col = db.collection(getLeaderboardCollectionName(event.envVersion))
     const existing = await col.where({ _openid: OPENID }).get()
     if (existing.data.length === 0) {
       await col.add({ data: { _openid: OPENID, levelProgress, updatedAt: Date.now() } })
@@ -61,7 +61,7 @@ exports.main = async (event) => {
   }
 
   if (action === 'load') {
-    const col = db.collection('leaderboard')
+    const col = db.collection(getLeaderboardCollectionName(event.envVersion))
     const existing = await col.where({ _openid: OPENID }).get()
     if (existing.data.length === 0) return { levelProgress: null }
     return { levelProgress: existing.data[0].levelProgress ?? null }
@@ -74,7 +74,8 @@ exports.main = async (event) => {
 - openid 始终从 `cloud.getWXContext()` 取，客户端不传
 - `levelProgress` 服务端 clamp 到 `[0, 29]`，防止伪造
 - 只允许前进（`levelProgress > old.levelProgress`）
-- `cloud.DYNAMIC_CURRENT_ENV` 确保开发/体验/正式版各连自己的云环境
+- `cloud.DYNAMIC_CURRENT_ENV` 只表示云函数部署所在的云环境；开发版、体验版、正式版如果共用同一套云函数，就不会自动隔离数据
+- 客户端需传 `envVersion`；集合按 `leaderboard_dev` / `leaderboard_trial` / `leaderboard` 路由
 
 ---
 
@@ -122,7 +123,7 @@ const LEVEL_PROGRESS_KEY = getEnvPrefix() + 'ywgy_level_progress'
 function saveLevelProgress(levelIdx) {
   storage.set(LEVEL_PROGRESS_KEY, levelIdx)
   // 异步 fire-and-forget，失败静默
-  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx })
+  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx, envVersion: ENV_VERSION })
 }
 ```
 
@@ -132,7 +133,7 @@ function saveLevelProgress(levelIdx) {
 // 从云端读取进度，成功则用云端值覆盖本地（取较大值）
 // onDone(levelIdx) 在读取完成后调用；失败时不调用（调用方继续用本地值）
 function loadCloudProgress(onDone) {
-  cloud.call('syncProgress', { action: 'load' }, (result) => {
+  cloud.call('syncProgress', { action: 'load', envVersion: ENV_VERSION }, (result) => {
     const remote = result && typeof result.levelProgress === 'number'
       ? result.levelProgress
       : null

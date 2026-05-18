@@ -1,6 +1,6 @@
 // Smoke test：验证 vitest + ES module 能跑通，并能 import 业务模块
 // 这是 D1 基础设施的真实"通电"测试。
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import GameLogic from '../src/logic/GameLogic.js'
 import { CONFIG } from '../src/config.js'
 
@@ -27,6 +27,44 @@ describe('smoke', () => {
     g.initLevel(0)
     expect(g.totalCars).toBe(27)
     expect(g.maxMoves).toBe(45)
+  })
+})
+
+describe('env.js runtime helpers', () => {
+  const oldWx = globalThis.wx
+
+  afterEach(() => {
+    if (oldWx === undefined) delete globalThis.wx
+    else globalThis.wx = oldWx
+  })
+
+  it('maps envVersion to the storage key prefix through real env.js', async () => {
+    const { getEnvPrefix } = await import('../src/utils/env.js')
+    expect(getEnvPrefix('develop')).toBe('dev_')
+    expect(getEnvPrefix('trial')).toBe('trial_')
+    expect(getEnvPrefix('release')).toBe('')
+    expect(getEnvPrefix('unknown')).toBe('')
+    expect(getEnvPrefix(undefined)).toBe('')
+  })
+
+  it('reads envVersion from wx.getAccountInfoSync() through real env.js', async () => {
+    globalThis.wx = {
+      getAccountInfoSync: () => ({
+        miniProgram: { envVersion: 'trial' },
+      }),
+    }
+
+    const { getEnvVersion } = await import('../src/utils/env.js')
+    expect(getEnvVersion()).toBe('trial')
+  })
+
+  it('falls back to release when envVersion cannot be read', async () => {
+    globalThis.wx = {
+      getAccountInfoSync: () => { throw new Error('no wx') },
+    }
+
+    const { getEnvVersion } = await import('../src/utils/env.js')
+    expect(getEnvVersion()).toBe('release')
   })
 })
 
@@ -238,37 +276,6 @@ describe('Game._handleRenderError 恢复逻辑', () => {
     game._handleRenderError(new Error('b'))
     expect(game._renderErrorRecoveryTimer).toBe(first)
     clearTimeout(first)
-  })
-})
-
-// NOTE: getEnvPrefix 依赖 wx 全局，使用内联 mock 验证逻辑契约
-describe('getEnvPrefix 环境前缀', () => {
-  it('develop 环境返回 "dev_"', () => {
-    const getEnvPrefix = (envVersion) => {
-      if (envVersion === 'develop') return 'dev_'
-      if (envVersion === 'trial')   return 'trial_'
-      return ''
-    }
-    expect(getEnvPrefix('develop')).toBe('dev_')
-  })
-
-  it('trial 环境返回 "trial_"', () => {
-    const getEnvPrefix = (envVersion) => {
-      if (envVersion === 'develop') return 'dev_'
-      if (envVersion === 'trial')   return 'trial_'
-      return ''
-    }
-    expect(getEnvPrefix('trial')).toBe('trial_')
-  })
-
-  it('release 环境返回 ""（正式版 key 不变）', () => {
-    const getEnvPrefix = (envVersion) => {
-      if (envVersion === 'develop') return 'dev_'
-      if (envVersion === 'trial')   return 'trial_'
-      return ''
-    }
-    expect(getEnvPrefix('release')).toBe('')
-    expect(getEnvPrefix(undefined)).toBe('')
   })
 })
 
