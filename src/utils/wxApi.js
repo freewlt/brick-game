@@ -1,6 +1,17 @@
 // wx API 统一封装层
 // 集中 try/catch、失败统一 console.warn 上报
 
+// 返回当前运行环境前缀，用于隔离本地 storage key
+// develop → 'dev_'，trial → 'trial_'，release → ''（正式版 key 不变，兼容已有玩家数据）
+export function getEnvPrefix() {
+  try {
+    const { envVersion } = wx.getAccountInfoSync().miniProgram
+    if (envVersion === 'develop') return 'dev_'
+    if (envVersion === 'trial')   return 'trial_'
+  } catch (e) {}
+  return ''
+}
+
 function warn(api, err) {
   console.warn(`[wxApi] ${api} failed:`, err)
 }

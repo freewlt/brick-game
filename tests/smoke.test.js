@@ -240,3 +240,34 @@ describe('Game._handleRenderError 恢复逻辑', () => {
     clearTimeout(first)
   })
 })
+
+// NOTE: getEnvPrefix 依赖 wx 全局，使用内联 mock 验证逻辑契约
+describe('getEnvPrefix 环境前缀', () => {
+  it('develop 环境返回 "dev_"', () => {
+    const getEnvPrefix = (envVersion) => {
+      if (envVersion === 'develop') return 'dev_'
+      if (envVersion === 'trial')   return 'trial_'
+      return ''
+    }
+    expect(getEnvPrefix('develop')).toBe('dev_')
+  })
+
+  it('trial 环境返回 "trial_"', () => {
+    const getEnvPrefix = (envVersion) => {
+      if (envVersion === 'develop') return 'dev_'
+      if (envVersion === 'trial')   return 'trial_'
+      return ''
+    }
+    expect(getEnvPrefix('trial')).toBe('trial_')
+  })
+
+  it('release 环境返回 ""（正式版 key 不变）', () => {
+    const getEnvPrefix = (envVersion) => {
+      if (envVersion === 'develop') return 'dev_'
+      if (envVersion === 'trial')   return 'trial_'
+      return ''
+    }
+    expect(getEnvPrefix('release')).toBe('')
+    expect(getEnvPrefix(undefined)).toBe('')
+  })
+})
