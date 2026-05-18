@@ -1,11 +1,10 @@
 // 排行榜场景 - 赢了个赢（天蓝玻璃主题）
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { getLives, shareForLife, getMyUserInfo, getMyProgress, saveMyUserInfo } from '../utils/storage.js'
-import { auth, userInfo, cloud, getEnvPrefix } from '../utils/wxApi.js'
+import { auth, userInfo, cloud } from '../utils/wxApi.js'
+import { getEnvVersion } from '../utils/env.js'
 
-let _envVersion = 'release'
-try { _envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release' } catch (e) {}
-const ENV_VERSION = _envVersion
+const ENV_VERSION = getEnvVersion()
 const e = stripVS
 
 const RANK_KEY = 'levelsPassed'

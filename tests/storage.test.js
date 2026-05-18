@@ -16,9 +16,13 @@ vi.mock('../src/utils/wxApi.js', () => {
     cloud:   { call: vi.fn(), setKV: vi.fn(), getFriendKV: vi.fn(), getMyKV: vi.fn() },
     userInfo:{ getBasic: vi.fn(), getProfile: vi.fn() },
     ad:      { createRewarded: () => null },
-    getEnvPrefix: () => '',
   }
 })
+
+vi.mock('../src/utils/env.js', () => ({
+  getEnvPrefix: () => '',
+  getEnvVersion: () => 'release',
+}))
 
 import { storage } from '../src/utils/wxApi.js'
 import {

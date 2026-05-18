@@ -5,6 +5,7 @@ const db = cloud.database()
 function getLeaderboardCollectionName(envVersion) {
   if (envVersion === 'develop') return 'leaderboard_dev'
   if (envVersion === 'trial') return 'leaderboard_trial'
+  if (!envVersion) console.warn('[getTopN] missing envVersion, fallback to leaderboard')
   return 'leaderboard'
 }
 

@@ -124,8 +124,9 @@ brick-game/
     └── utils/
         ├── draw.js           # roundRect 等绘图工具
         ├── rng.js            # LCG 伪随机数生成器（seededRng，供 GameLogic 和 DailyScene 共用）
+        ├── env.js            # 运行环境读取与本地 key 前缀（develop / trial / release）
         ├── storage.js        # 机会系统、排行榜、关卡进度（含云端同步）、成就持久化
-        ├── wxApi.js          # 微信 API 统一封装层（storage / share / auth / cloud / ad / getEnvPrefix）
+        ├── wxApi.js          # 微信 API 统一封装层（storage / share / auth / cloud / ad）
         └── audio.js          # 音效系统（WebAudio 合成，含 BGM、消除、连消等）
 ```
 
@@ -139,7 +140,7 @@ brick-game/
 - **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene / DailyScene 八个场景类，通过 `_switchScene()` 切换，并在旧场景 `destroy()` 中释放动画、渐变缓存和音频资源
 - **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等；音频节点结束后主动断开，非 BGM 音效延迟任务可在场景销毁时清理
 - **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
-- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端排行榜集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；本地 key 和云集合均按运行环境隔离（开发版 `leaderboard_dev` / 体验版 `leaderboard_trial` / 正式版 `leaderboard`）
+- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端排行榜集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；关卡进度与本地排行榜兜底 key 按运行环境加前缀，云集合按开发版 `leaderboard_dev` / 体验版 `leaderboard_trial` / 正式版 `leaderboard` 隔离
 - **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
 ---
@@ -160,6 +161,8 @@ brick-game/
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
 | `src/config.js` → `AD_UNIT_ID` | 填入微信流量主激励视频广告单元 ID；留空时失败无机会时直接送机会（降级保底） |
 | `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建集合 `leaderboard`、`leaderboard_trial`、`leaderboard_dev`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
+
+> 部署提醒：开发版、体验版、正式版仍调用同一套云函数，因此三个云函数都必须重新上传部署；旧客户端如果没有传 `envVersion`，云函数会回退到正式集合 `leaderboard` 并输出缺失环境参数日志。
 
 ---
 

@@ -1,10 +1,9 @@
 // 存储工具 - 机会系统 + 排行榜 + 分享
-import { storage, share, cloud, auth, getEnvPrefix } from './wxApi.js'
+import { storage, share, cloud, auth } from './wxApi.js'
+import { getEnvPrefix, getEnvVersion } from './env.js'
 
 // 当前运行环境，传给云函数用于集合路由（develop→leaderboard_dev, trial→leaderboard_trial, release→leaderboard）
-let _envVersion = 'release'
-try { _envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release' } catch (e) {}
-const ENV_VERSION = _envVersion
+const ENV_VERSION = getEnvVersion()
 
 // ==================== 机会系统 ====================
 const LIVES_KEY  = 'ywgy_lives'
@@ -114,7 +113,7 @@ function loadCloudProgress(onDone) {
 
 // ==================== 排行榜 ====================
 const RANK_KEY        = 'levelsPassed'
-const MY_PROGRESS_KEY = 'ywgy_my_progress'
+const MY_PROGRESS_KEY = getEnvPrefix() + 'ywgy_my_progress'
 
 // 上传通关数（通关时调用）并本地备份（排行榜显示自己用）
 function saveProgress(levelsPassed) {
