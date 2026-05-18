@@ -7,7 +7,7 @@ import SettingsScene    from './src/scenes/SettingsScene.js'
 import AllClearScene    from './src/scenes/AllClearScene.js'
 import AchievementScene from './src/scenes/AchievementScene.js'
 import DailyScene       from './src/scenes/DailyScene.js'
-import { handleShareEntry, saveLevelProgress, saveMyUserInfo } from './src/utils/storage.js'
+import { handleShareEntry, saveLevelProgress, saveMyUserInfo, loadCloudProgress } from './src/utils/storage.js'
 import { auth, userInfo } from './src/utils/wxApi.js'
 import AudioManager     from './src/utils/audio.js'
 
@@ -80,6 +80,9 @@ const Game = {
 
     // 隐私授权 → 拉取并缓存自己的头像/昵称
     this._initUserInfo()
+
+    // 启动时静默同步云端进度，不阻塞 UI；云端值回来后如果更大则覆盖本地
+    loadCloudProgress(() => {})
 
     this.showStart()
     this.bindEvents()
