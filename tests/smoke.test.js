@@ -147,6 +147,13 @@ describe('GameScene._resultTimer 存储行为', () => {
   })
 })
 
+describe('CONFIG.AD_UNIT_ID', () => {
+  it('存在且默认为空字符串', async () => {
+    const { CONFIG } = await import('../src/config.js')
+    expect(CONFIG.AD_UNIT_ID).toBe('')
+  })
+})
+
 // NOTE: game.js 依赖 wx 全局和模块级 ctx/canvas，无法在 Node 环境导入。
 // 以下测试用内联 replica 验证逻辑契约，不提供 game.js 的回归保护。
 describe('Game._handleRenderError 恢复逻辑', () => {
