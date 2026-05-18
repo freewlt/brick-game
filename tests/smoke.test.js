@@ -154,6 +154,7 @@ describe('CONFIG.AD_UNIT_ID', () => {
   })
 })
 
+// NOTE: ad.showRewarded 依赖 wx 全局，使用内联 mock 验证降级逻辑契约
 describe('ad.showRewarded 降级逻辑', () => {
   it('adUnitId 为空时直接调 onSuccess', () => {
     let called = false

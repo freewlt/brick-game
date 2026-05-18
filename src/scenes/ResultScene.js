@@ -1,6 +1,7 @@
 // 结算场景 - 赢了个赢（天蓝玻璃主题）
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
-import { spendLife, getLives, getRecoverSecondsLeft, shareForLife, saveProgress, saveLevelProgress } from '../utils/storage.js'
+import { spendLife, getLives, getRecoverSecondsLeft, addLife, saveProgress, saveLevelProgress } from '../utils/storage.js'
+import { ad } from '../utils/wxApi.js'
 import { CONFIG } from '../config.js'
 
 const e = stripVS
@@ -351,7 +352,7 @@ export default class ResultScene {
       this.homeBtn = { x: btn2X, y: cy, w: bw2, h: btnH }
 
     } else {
-      // 失败：再试一次 / 分享得机会 + 首页
+      // 失败：再试一次 / 看广告得机会 + 首页
       const bw2  = (cardW - 12) / 2
       const btn1X = padX
       const btn2X = padX + bw2 + 12
@@ -386,7 +387,7 @@ export default class ResultScene {
         ctx.font = 'bold 14px sans-serif'
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillStyle = '#fff'
-        ctx.fillText(e('📣 分享得机会'), btn1X + bw2 / 2, cy + btnH / 2)
+        ctx.fillText(e('📺 看广告得机会'), btn1X + bw2 / 2, cy + btnH / 2)
         this.shareBtn  = { x: btn1X, y: cy, w: bw2, h: btnH }
         this.retryBtn  = null
       }
@@ -443,17 +444,15 @@ export default class ResultScene {
       return
     }
     if (hit(this.shareBtn)) {
-      // 分享成功后机会+1，刷新当前场景状态
-      shareForLife((next) => {
-        if (next !== null) {
-          this.lives    = next
-          if (this._recoverTimer) {
-            clearInterval(this._recoverTimer)
-            this._recoverTimer = null
-          }
-          this.shareBtn = null  // 触发重绘时切换回"再试一次"按钮
+      ad.showRewarded(CONFIG.AD_UNIT_ID, () => {
+        const next = addLife(1)
+        this.lives = next
+        if (this._recoverTimer) {
+          clearInterval(this._recoverTimer)
+          this._recoverTimer = null
         }
-      })
+        this.shareBtn = null   // 切换回"再试一次"按钮
+      }, null)
       return
     }
     if (hit(this.homeBtn)) {
