@@ -1,5 +1,5 @@
 // 存储工具 - 机会系统 + 排行榜 + 分享
-import { storage, share, cloud, auth } from './wxApi.js'
+import { storage, share, cloud, auth, getEnvPrefix } from './wxApi.js'
 
 // ==================== 机会系统 ====================
 const LIVES_KEY  = 'ywgy_lives'
@@ -73,7 +73,10 @@ function getRecoverSecondsLeft() {
 }
 
 // ==================== 关卡进度 ====================
-const LEVEL_PROGRESS_KEY = 'ywgy_level_progress'
+// 正式版：'ywgy_level_progress'（兼容已有玩家数据）
+// 体验版：'trial_ywgy_level_progress'
+// 开发版：'dev_ywgy_level_progress'
+const LEVEL_PROGRESS_KEY = getEnvPrefix() + 'ywgy_level_progress'
 
 // 读取已解锁的最高关卡索引（0-based）；首次返回 0
 function getLevelProgress() {
@@ -83,8 +86,25 @@ function getLevelProgress() {
 }
 
 // 保存当前进入的关卡索引（直接覆盖，退出是哪关下次就从哪关开始）
+// 同时异步同步到云端（fire-and-forget，失败静默）
 function saveLevelProgress(levelIdx) {
   storage.set(LEVEL_PROGRESS_KEY, levelIdx)
+  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx })
+}
+
+// 从云端读取进度，成功则用云端值覆盖本地（取较大值）
+// onDone(levelIdx) 在读取完成后调用；云端返回 null 或失败时静默不调用
+function loadCloudProgress(onDone) {
+  cloud.call('syncProgress', { action: 'load' }, (result) => {
+    const remote = result && typeof result.levelProgress === 'number'
+      ? result.levelProgress
+      : null
+    if (remote === null) return
+    const local = getLevelProgress()
+    const best  = Math.max(remote, local)
+    if (best > local) storage.set(LEVEL_PROGRESS_KEY, best)
+    onDone && onDone(best)
+  })
 }
 
 // ==================== 排行榜 ====================
@@ -375,6 +395,7 @@ export {
   // 关卡进度
   getLevelProgress,
   saveLevelProgress,
+  loadCloudProgress,
   // 排行榜
   saveProgress,
   fetchFriendRank,

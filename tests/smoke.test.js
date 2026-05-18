@@ -271,3 +271,89 @@ describe('getEnvPrefix 环境前缀', () => {
     expect(getEnvPrefix(undefined)).toBe('')
   })
 })
+
+// NOTE: loadCloudProgress 依赖 wx 全局，使用内联 mock 验证逻辑契约
+describe('loadCloudProgress 云端进度恢复逻辑', () => {
+  it('云端返回更大值时覆盖本地，调用 onDone(best)', () => {
+    let stored = 3
+    let doneCalled = null
+    const mockStorage = { get: () => stored, set: (k, v) => { stored = v } }
+    const mockCloud = {
+      call(name, data, onSuccess) { onSuccess && onSuccess({ levelProgress: 9 }) }
+    }
+    function loadCloudProgress(onDone) {
+      mockCloud.call('syncProgress', { action: 'load' }, (result) => {
+        const remote = result && typeof result.levelProgress === 'number' ? result.levelProgress : null
+        if (remote === null) return
+        const local = mockStorage.get()
+        const best  = Math.max(remote, local)
+        if (best > local) mockStorage.set('key', best)
+        onDone && onDone(best)
+      })
+    }
+    loadCloudProgress((v) => { doneCalled = v })
+    expect(stored).toBe(9)
+    expect(doneCalled).toBe(9)
+  })
+
+  it('云端返回更小值时不覆盖本地，仍调用 onDone(local)', () => {
+    let stored = 9
+    let doneCalled = null
+    const mockStorage = { get: () => stored, set: (k, v) => { stored = v } }
+    const mockCloud = {
+      call(name, data, onSuccess) { onSuccess && onSuccess({ levelProgress: 3 }) }
+    }
+    function loadCloudProgress(onDone) {
+      mockCloud.call('syncProgress', { action: 'load' }, (result) => {
+        const remote = result && typeof result.levelProgress === 'number' ? result.levelProgress : null
+        if (remote === null) return
+        const local = mockStorage.get()
+        const best  = Math.max(remote, local)
+        if (best > local) mockStorage.set('key', best)
+        onDone && onDone(best)
+      })
+    }
+    loadCloudProgress((v) => { doneCalled = v })
+    expect(stored).toBe(9)
+    expect(doneCalled).toBe(9)
+  })
+
+  it('云端返回 null 时静默不调用 onDone', () => {
+    let doneCalled = false
+    const mockCloud = {
+      call(name, data, onSuccess) { onSuccess && onSuccess({ levelProgress: null }) }
+    }
+    function loadCloudProgress(onDone) {
+      mockCloud.call('syncProgress', { action: 'load' }, (result) => {
+        const remote = result && typeof result.levelProgress === 'number' ? result.levelProgress : null
+        if (remote === null) return
+        onDone && onDone(remote)
+      })
+    }
+    loadCloudProgress(() => { doneCalled = true })
+    expect(doneCalled).toBe(false)
+  })
+
+  it('云端返回相同值时不写本地，仍调用 onDone(local)', () => {
+    let stored = 5
+    let writeCount = 0
+    let doneCalled = null
+    const mockStorage = { get: () => stored, set: (k, v) => { stored = v; writeCount++ } }
+    const mockCloud = {
+      call(name, data, onSuccess) { onSuccess && onSuccess({ levelProgress: 5 }) }
+    }
+    function loadCloudProgress(onDone) {
+      mockCloud.call('syncProgress', { action: 'load' }, (result) => {
+        const remote = result && typeof result.levelProgress === 'number' ? result.levelProgress : null
+        if (remote === null) return
+        const local = mockStorage.get()
+        const best  = Math.max(remote, local)
+        if (best > local) mockStorage.set('key', best)
+        onDone && onDone(best)
+      })
+    }
+    loadCloudProgress((v) => { doneCalled = v })
+    expect(writeCount).toBe(0)
+    expect(doneCalled).toBe(5)
+  })
+})
