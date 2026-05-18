@@ -13,7 +13,7 @@ function getLeaderboardCollectionName(envVersion) {
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
-  const n = event.n || 50
+  const n = Math.min(Math.max(parseInt(event.n, 10) || 50, 1), 200)
 
   const res = await db.collection(getLeaderboardCollectionName(event.envVersion))
     .orderBy('levelsPassed', 'desc')

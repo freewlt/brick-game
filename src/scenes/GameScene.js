@@ -51,7 +51,8 @@ export default class GameScene {
     // Header 文字宽度缓存（关卡内文字固定，避免每帧 measureText）
     this._textWidthCache   = new Map()
     this._gradCache = new Map()
-    this._resultTimer = null   // showResult 延迟句柄，destroy() 时清理
+    this._resultTimer = null        // showResult 延迟句柄，destroy() 时清理
+    this._selectedCellTimer = null  // selectedCell 高亮清除句柄，destroy() 时清理
   }
 
   init() {
@@ -1150,7 +1151,8 @@ export default class GameScene {
           } else if (result) {
             AudioManager.playInsert()
             this.selectedCell = { r, c }
-            setTimeout(() => { this.selectedCell = null }, 180)
+            if (this._selectedCellTimer) clearTimeout(this._selectedCellTimer)
+            this._selectedCellTimer = setTimeout(() => { this.selectedCell = null; this._selectedCellTimer = null }, 180)
           }
           return
         }
@@ -1365,6 +1367,10 @@ export default class GameScene {
     if (this._resultTimer) {
       clearTimeout(this._resultTimer)
       this._resultTimer = null
+    }
+    if (this._selectedCellTimer) {
+      clearTimeout(this._selectedCellTimer)
+      this._selectedCellTimer = null
     }
     this.floatTexts.length = 0
     this.particles.length  = 0

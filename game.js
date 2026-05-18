@@ -11,6 +11,8 @@ import { handleShareEntry, saveLevelProgress, saveMyUserInfo, loadCloudProgress 
 import { auth, userInfo } from './src/utils/wxApi.js'
 import AudioManager     from './src/utils/audio.js'
 
+const CLOUD_ENV_ID = 'YOUR_ENV_ID'
+
 const canvas = wx.createCanvas()
 const ctx = canvas.getContext('2d')
 
@@ -65,7 +67,11 @@ const Game = {
   init() {
     // 初始化微信云开发（envId 在微信开发者工具→云开发控制台获取后填入）
     if (typeof wx !== 'undefined' && wx.cloud) {
-      wx.cloud.init({ env: 'YOUR_ENV_ID', traceUser: true })
+      const cloudOptions = { traceUser: true }
+      if (CLOUD_ENV_ID && CLOUD_ENV_ID !== 'YOUR_ENV_ID') {
+        cloudOptions.env = CLOUD_ENV_ID
+      }
+      wx.cloud.init(cloudOptions)
     }
 
     // 初始化音效系统（创建 WebAudioContext）

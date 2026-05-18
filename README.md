@@ -168,6 +168,10 @@ brick-game/
 
 ## 更新日志
 
+### v1.7.2（2026-05-18）
+- **修复** `getTopN` 云函数 `event.n` 参数缺少上限校验，恶意传入超大值会导致单次查询返回过多数据；现在服务端 clamp 到 `[1, 200]`，非法值回落到默认 50
+- **修复** `GameScene` 点击棋盘后的 `selectedCell` 高亮定时器未追踪句柄；场景销毁后定时器仍可能回调并写入已废弃的场景状态；改为 `_selectedCellTimer` 追踪，`destroy()` 时一并清理
+
 ### v1.7.1（2026-05-18）
 - **修复** 云函数无法执行：`project.config.json` 的 `packOptions.ignore` 将 `package.json` 排除在上传包之外，导致云端 npm install 无从执行，`wx-server-sdk` 始终找不到；移除该忽略规则后三个云函数均可正常部署
 - **修复** 三个云函数（`submitScore` / `getTopN` / `syncProgress`）`package.json` 补充 `wx-server-sdk ~2.6.3` 依赖声明
