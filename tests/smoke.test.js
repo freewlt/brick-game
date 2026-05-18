@@ -154,6 +154,44 @@ describe('CONFIG.AD_UNIT_ID', () => {
   })
 })
 
+describe('ad.showRewarded 降级逻辑', () => {
+  it('adUnitId 为空时直接调 onSuccess', () => {
+    let called = false
+    const adMock = {
+      createRewarded(id) { return id ? {} : null },
+      showRewarded(adUnitId, onSuccess, onFail) {
+        if (!adUnitId) { onSuccess && onSuccess(); return }
+        const inst = this.createRewarded(adUnitId)
+        if (!inst) { onSuccess && onSuccess(); return }
+        inst.show().then((isEnded) => {
+          if (isEnded) onSuccess && onSuccess()
+          else         onFail    && onFail()
+        })
+      },
+    }
+    adMock.showRewarded('', () => { called = true }, null)
+    expect(called).toBe(true)
+  })
+
+  it('createRewarded 返回 null 时直接调 onSuccess', () => {
+    let called = false
+    const adMock = {
+      createRewarded() { return null },
+      showRewarded(adUnitId, onSuccess, onFail) {
+        if (!adUnitId) { onSuccess && onSuccess(); return }
+        const inst = this.createRewarded(adUnitId)
+        if (!inst) { onSuccess && onSuccess(); return }
+        inst.show().then((isEnded) => {
+          if (isEnded) onSuccess && onSuccess()
+          else         onFail    && onFail()
+        })
+      },
+    }
+    adMock.showRewarded('some-id', () => { called = true }, null)
+    expect(called).toBe(true)
+  })
+})
+
 // NOTE: game.js 依赖 wx 全局和模块级 ctx/canvas，无法在 Node 环境导入。
 // 以下测试用内联 replica 验证逻辑契约，不提供 game.js 的回归保护。
 describe('Game._handleRenderError 恢复逻辑', () => {

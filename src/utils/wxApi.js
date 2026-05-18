@@ -136,4 +136,15 @@ export const ad = {
       }
     } catch (e) { warn('createRewardedVideoAd', e); return null }
   },
+
+  // adUnitId 为空或广告创建失败时直接调 onSuccess（降级保底）
+  showRewarded(adUnitId, onSuccess, onFail) {
+    if (!adUnitId) { onSuccess && onSuccess(); return }
+    const inst = this.createRewarded(adUnitId)
+    if (!inst)    { onSuccess && onSuccess(); return }
+    inst.show().then((isEnded) => {
+      if (isEnded) onSuccess && onSuccess()
+      else         onFail    && onFail()
+    })
+  },
 }
