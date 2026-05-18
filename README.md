@@ -165,6 +165,11 @@ brick-game/
 
 ## 更新日志
 
+### v1.7.1（2026-05-18）
+- **修复** 云函数无法执行：`project.config.json` 的 `packOptions.ignore` 将 `package.json` 排除在上传包之外，导致云端 npm install 无从执行，`wx-server-sdk` 始终找不到；移除该忽略规则后三个云函数均可正常部署
+- **修复** 三个云函数（`submitScore` / `getTopN` / `syncProgress`）`package.json` 补充 `wx-server-sdk ~2.6.3` 依赖声明
+- **修复** `saveProgress` 的 `cloud.call` 补充 `onFail` 错误日志，便于排查云函数调用失败
+
 ### v1.7.0（2026-05-18）
 - **新增** 云端关卡进度同步：通关进度异步写入云端 `leaderboard` 集合，启动时从云端读取最大值覆盖本地，换设备不再丢失进度
 - **修复** 开发/体验/正式版共用同一本地 storage key 导致进度互相污染；本地 key 按运行环境加前缀（`dev_` / `trial_` / 正式版无前缀），三个环境完全隔离
