@@ -57,7 +57,7 @@ export const CONFIG = {
       { carTypes: 6, layerMax: 3, setCount: 3, maxMoves: 68 },  // 7：54辆，步均1.26
       { carTypes: 6, layerMax: 3, setCount: 4, maxMoves: 90 },  // 8：72辆，步均1.25
       { carTypes: 7, layerMax: 3, setCount: 4, maxMoves: 103 }, // 9：84辆，步均1.23
-      { carTypes: 8, layerMax: 3, setCount: 4, maxMoves: 116 }, // 10：96辆，步均1.21，高难
+      { carTypes: 8, layerMax: 3, setCount: 4, maxMoves: 120 }, // 10：96辆，步均1.25，高难
     ]
 
     // ── 算法生成第11~30关（难度持续爬升）──
