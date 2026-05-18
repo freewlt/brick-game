@@ -53,20 +53,20 @@
 | 第 4 关 | 5 | 2 | 45 | 52 | ⭐⭐ |
 | 第 5 关 | 5 | 3 | 45 | 56 | ⭐⭐ |
 | 第 6 关 | 5 | 3 | 60 | 75 | ⭐⭐⭐ |
-| 第 7 关 | 6 | 3 | 54 | 68 | ⭐⭐⭐ |
-| 第 8 关 | 6 | 3 | 72 | 90 | ⭐⭐⭐⭐ |
-| 第 9 关 | 7 | 3 | 84 | 103 | ⭐⭐⭐⭐ |
-| 第 10 关 | 8 | 3 | 96 | 116 | ⭐⭐⭐⭐⭐ 高难 |
+| 第 7 关 | 6 | 2 | 54 | 72 | ⭐⭐⭐ |
+| 第 8 关 | 6 | 3 | 54 | 75 | ⭐⭐⭐ |
+| 第 9 关 | 7 | 3 | 63 | 88 | ⭐⭐⭐⭐ |
+| 第 10 关 | 7 | 3 | 84 | 118 | ⭐⭐⭐⭐ 高难 |
 
-### 算法生成（第 11~30 关）
+### 手工精调（第 11~30 关）
 
-难度公式：`maxMoves = ceil(carTypes × setCount × ratio)`，ratio 越低越难。
+全部 30 关均为静态手工精调参数，步数上限公式：`maxMoves = ceil(carTypes × setCount × 3 × ratio)`。
 
-| 阶段 | 关卡 | 特点 | 步均容差 |
-|------|------|------|----------|
-| 进阶 | 11~16 | carTypes 5~7，layerMax 3，setCount 4~5 | 1.18~1.22 |
-| 硬核 | 17~23 | carTypes 6~8，layerMax 4，setCount 5~6 | 1.16~1.18 |
-| 地狱 | 24~30 | carTypes 8，layerMax 5，setCount 6~8 | 1.15 |
+| 阶段 | 关卡 | 特点 | AI 通关率 |
+|------|------|------|-----------|
+| 第一道门槛 | 7~10 | carTypes 6~7，layerMax 2~3，setCount 3~4 | 10~52% |
+| 进阶 | 11~20 | carTypes 6~8，layerMax 3~4，setCount 3~4，喘息-挑战交替 | 0~38% |
+| 极难 | 21~30 | carTypes 8，layerMax 4~5，setCount 5~7 | 0% |
 
 ---
 
@@ -88,7 +88,7 @@
 
 - **好友排行榜**：通过微信云存储展示好友通关进度排名
 - **机会系统**：每位玩家拥有 3 次游戏机会，失败消耗 1 次，30 分钟自动恢复 1 次
-- **分享得机会**：分享给好友后可获得额外 1 次机会
+- **看广告得机会**：失败且机会耗尽时，看激励视频广告可获得额外 1 次机会；广告未配置时直接送机会（降级保底）
 - **好友助力**：从好友分享链接进入游戏时，自动获得 +1 次机会并显示提示
 
 ---
@@ -103,7 +103,8 @@ brick-game/
 ├── sitemap.json
 ├── cloudfunctions/
 │   ├── submitScore/          # 云函数：通关时 upsert 玩家分数到 leaderboard 集合
-│   └── getTopN/              # 云函数：查询全服 TOP 50 排行榜
+│   ├── getTopN/              # 云函数：查询全服 TOP 50 排行榜
+│   └── syncProgress/         # 云函数：读写关卡进度（save/load，按 openid 隔离）
 └── src/
     ├── config.js             # 全局常量（棋盘尺寸、30关配置、颜色主题、广告配置）
     ├── logic/
@@ -122,8 +123,9 @@ brick-game/
     │   └── DailyScene.js     # 每日挑战页（固定种子关卡、连胜记录）
     └── utils/
         ├── draw.js           # roundRect 等绘图工具
-        ├── storage.js        # 机会系统、排行榜、分享逻辑、成就持久化
-        ├── wxApi.js          # 微信 API 统一封装层（storage / share / auth / cloud / ad）
+        ├── rng.js            # LCG 伪随机数生成器（seededRng，供 GameLogic 和 DailyScene 共用）
+        ├── storage.js        # 机会系统、排行榜、关卡进度（含云端同步）、成就持久化
+        ├── wxApi.js          # 微信 API 统一封装层（storage / share / auth / cloud / ad / getEnvPrefix）
         └── audio.js          # 音效系统（WebAudio 合成，含 BGM、消除、连消等）
 ```
 
@@ -137,6 +139,7 @@ brick-game/
 - **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene / DailyScene 八个场景类，通过 `_switchScene()` 切换，并在旧场景 `destroy()` 中释放动画、渐变缓存和音频资源
 - **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等；音频节点结束后主动断开，非 BGM 音效延迟任务可在场景销毁时清理
 - **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
+- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端 `leaderboard` 集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；本地 key 按运行环境加前缀（`dev_` / `trial_` / 正式版无前缀），开发/体验/正式版进度互不干扰
 - **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
 ---
@@ -148,19 +151,31 @@ brick-game/
 3. 填写自己的 AppID（或使用测试号）
 4. 点击编译预览即可运行
 
-> 注意：好友排行榜、分享得机会等社交功能需要真机预览才能正常调用微信 API。
+> 注意：好友排行榜、进度云同步等社交功能需要真机预览才能正常调用微信 API。
 
 ### 上线前需填写
 
 | 位置 | 说明 |
 |------|------|
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
-| `src/config.js` → `AD_CONFIG.rewardedUnitId` | 填入微信流量主激励视频广告单元 ID；留空时自动降级为分享获取道具 |
-| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID（已填：`cloud1-d5gc1kjfu38bc0a22`）；在云开发控制台创建集合 `leaderboard`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore` 和 `cloudfunctions/getTopN` 文件夹 → 上传并部署：云端安装依赖 |
+| `src/config.js` → `AD_UNIT_ID` | 填入微信流量主激励视频广告单元 ID；留空时失败无机会时直接送机会（降级保底） |
+| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建集合 `leaderboard`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
 
 ---
 
 ## 更新日志
+
+### v1.7.0（2026-05-18）
+- **新增** 云端关卡进度同步：通关进度异步写入云端 `leaderboard` 集合，启动时从云端读取最大值覆盖本地，换设备不再丢失进度
+- **修复** 开发/体验/正式版共用同一本地 storage key 导致进度互相污染；本地 key 按运行环境加前缀（`dev_` / `trial_` / 正式版无前缀），三个环境完全隔离
+- **新增** 云函数 `syncProgress`（读写合一，`action: 'save'/'load'`），服务端 clamp `[0,29]` 防伪造，只允许前进不允许倒退
+- **验证** `npm test` 通过：6 个测试文件、104 个测试用例
+
+### v1.6.0（2026-05-18）
+- **关卡重设计** 全部 30 关改为静态手工精调参数，修正步数公式（原公式缺少 ×3 导致步数约为正确值的 1/3）；第 7~10 关重新平衡，第 10 关从 8 车型 96 辆降为 7 车型 84 辆，解决结构性死锁问题
+- **新增** 看广告得机会：结算页失败无机会时，点击「📺 看广告得机会」触发激励视频广告；`AD_UNIT_ID` 留空时直接送机会（降级保底），上线只需填写一个配置项
+- **重构** LCG 伪随机数生成器提取为 `src/utils/rng.js` 共享工具，消除 `GameLogic` 与 `DailyScene` 的重复实现
+- **验证** `npm test` 通过：5 个测试文件、97 个测试用例
 
 ### v1.5.1（2026-05-15）
 - **稳定性** 渲染循环增加异常兜底，场景绘制异常时显示加载提示，减少点击开始后黑屏或闪退体感
