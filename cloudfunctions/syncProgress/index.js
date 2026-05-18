@@ -2,10 +2,16 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+function getLeaderboardCollectionName(envVersion) {
+  if (envVersion === 'develop') return 'leaderboard_dev'
+  if (envVersion === 'trial') return 'leaderboard_trial'
+  return 'leaderboard'
+}
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const { action } = event
-  const col = db.collection('leaderboard')
+  const col = db.collection(getLeaderboardCollectionName(event.envVersion))
 
   if (action === 'save') {
     const levelProgress = Math.min(Math.max(parseInt(event.levelProgress, 10) || 0, 0), 29)

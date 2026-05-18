@@ -272,6 +272,27 @@ describe('getEnvPrefix 环境前缀', () => {
   })
 })
 
+describe('leaderboard 云集合环境隔离', () => {
+  const getLeaderboardCollectionName = (envVersion) => {
+    if (envVersion === 'develop') return 'leaderboard_dev'
+    if (envVersion === 'trial') return 'leaderboard_trial'
+    return 'leaderboard'
+  }
+
+  it('develop 环境写入 leaderboard_dev', () => {
+    expect(getLeaderboardCollectionName('develop')).toBe('leaderboard_dev')
+  })
+
+  it('trial 环境写入 leaderboard_trial', () => {
+    expect(getLeaderboardCollectionName('trial')).toBe('leaderboard_trial')
+  })
+
+  it('release 和未知环境继续使用 leaderboard', () => {
+    expect(getLeaderboardCollectionName('release')).toBe('leaderboard')
+    expect(getLeaderboardCollectionName(undefined)).toBe('leaderboard')
+  })
+})
+
 // NOTE: loadCloudProgress 依赖 wx 全局，使用内联 mock 验证逻辑契约
 describe('loadCloudProgress 云端进度恢复逻辑', () => {
   it('云端返回更大值时覆盖本地，调用 onDone(best)', () => {

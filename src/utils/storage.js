@@ -1,6 +1,11 @@
 // 存储工具 - 机会系统 + 排行榜 + 分享
 import { storage, share, cloud, auth, getEnvPrefix } from './wxApi.js'
 
+// 当前运行环境，传给云函数用于集合路由（develop→leaderboard_dev, trial→leaderboard_trial, release→leaderboard）
+let _envVersion = 'release'
+try { _envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release' } catch (e) {}
+const ENV_VERSION = _envVersion
+
 // ==================== 机会系统 ====================
 const LIVES_KEY  = 'ywgy_lives'
 const LIVES_MAX  = 3
@@ -89,13 +94,13 @@ function getLevelProgress() {
 // 同时异步同步到云端（fire-and-forget，失败静默）
 function saveLevelProgress(levelIdx) {
   storage.set(LEVEL_PROGRESS_KEY, levelIdx)
-  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx })
+  cloud.call('syncProgress', { action: 'save', levelProgress: levelIdx, envVersion: ENV_VERSION })
 }
 
 // 从云端读取进度，成功则用云端值覆盖本地（取较大值）
 // onDone(levelIdx) 在读取完成后调用；云端返回 null 或失败时静默不调用
 function loadCloudProgress(onDone) {
-  cloud.call('syncProgress', { action: 'load' }, (result) => {
+  cloud.call('syncProgress', { action: 'load', envVersion: ENV_VERSION }, (result) => {
     const remote = result && typeof result.levelProgress === 'number'
       ? result.levelProgress
       : null
@@ -121,6 +126,7 @@ function saveProgress(levelsPassed) {
     nickname:     myInfo.nickname  || '玩家',
     avatarUrl:    myInfo.avatarUrl || '',
     levelsPassed,
+    envVersion:   ENV_VERSION,
   }, null, (e) => { console.error('[leaderboard] submitScore failed:', e) })
 }
 

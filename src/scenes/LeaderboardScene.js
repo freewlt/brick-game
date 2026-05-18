@@ -1,7 +1,11 @@
 // 排行榜场景 - 赢了个赢（天蓝玻璃主题）
 import { roundRect, drawGlassCard, stripVS } from '../utils/draw.js'
 import { getLives, shareForLife, getMyUserInfo, getMyProgress, saveMyUserInfo } from '../utils/storage.js'
-import { auth, userInfo, cloud } from '../utils/wxApi.js'
+import { auth, userInfo, cloud, getEnvPrefix } from '../utils/wxApi.js'
+
+let _envVersion = 'release'
+try { _envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release' } catch (e) {}
+const ENV_VERSION = _envVersion
 const e = stripVS
 
 const RANK_KEY = 'levelsPassed'
@@ -117,7 +121,7 @@ export default class LeaderboardScene {
   }
 
   _silentRefresh() {
-    cloud.call('getTopN', { n: 50 },
+    cloud.call('getTopN', { n: 50, envVersion: ENV_VERSION },
       (list) => { this._buildFromCloud(list || []) },
       () => {}
     )
@@ -125,7 +129,7 @@ export default class LeaderboardScene {
 
   // ── 取数：调云函数 getTopN ───────────────────────────────────────────
   _loadRank() {
-    cloud.call('getTopN', { n: 50 },
+    cloud.call('getTopN', { n: 50, envVersion: ENV_VERSION },
       (list) => { this._buildFromCloud(list || []) },
       ()     => { this._buildFromCloud([]) }
     )

@@ -2,12 +2,18 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+function getLeaderboardCollectionName(envVersion) {
+  if (envVersion === 'develop') return 'leaderboard_dev'
+  if (envVersion === 'trial') return 'leaderboard_trial'
+  return 'leaderboard'
+}
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const { nickname, avatarUrl } = event
   const levelsPassed = Math.min(Math.max(parseInt(event.levelsPassed) || 0, 0), 30)
 
-  const col = db.collection('leaderboard')
+  const col = db.collection(getLeaderboardCollectionName(event.envVersion))
   const existing = await col.where({ _openid: OPENID }).get()
 
   if (existing.data.length === 0) {

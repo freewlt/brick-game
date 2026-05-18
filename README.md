@@ -139,7 +139,7 @@ brick-game/
 - **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene / DailyScene 八个场景类，通过 `_switchScene()` 切换，并在旧场景 `destroy()` 中释放动画、渐变缓存和音频资源
 - **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等；音频节点结束后主动断开，非 BGM 音效延迟任务可在场景销毁时清理
 - **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
-- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端 `leaderboard` 集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；本地 key 按运行环境加前缀（`dev_` / `trial_` / 正式版无前缀），开发/体验/正式版进度互不干扰
+- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端排行榜集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；本地 key 和云集合均按运行环境隔离（开发版 `leaderboard_dev` / 体验版 `leaderboard_trial` / 正式版 `leaderboard`）
 - **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
 ---
@@ -159,7 +159,7 @@ brick-game/
 |------|------|
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
 | `src/config.js` → `AD_UNIT_ID` | 填入微信流量主激励视频广告单元 ID；留空时失败无机会时直接送机会（降级保底） |
-| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建集合 `leaderboard`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
+| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建集合 `leaderboard`、`leaderboard_trial`、`leaderboard_dev`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
 
 ---
 
