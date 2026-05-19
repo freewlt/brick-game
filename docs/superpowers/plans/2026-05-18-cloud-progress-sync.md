@@ -4,9 +4,9 @@
 
 **Goal:** 将关卡进度从纯本地存储升级为云端同步，解决换设备进度归零和开发/体验/正式版进度互相污染两个问题。
 
-**Architecture:** 新增云函数 `syncProgress`（读写合一）；`wxApi.js` 新增 `getEnvPrefix()` 工具函数；`storage.js` 的本地 key 加环境前缀，`saveLevelProgress` 追加异步云端写，新增 `loadCloudProgress` 供启动时从云端恢复进度；`game.js` 在 `init()` 里调用一次 `loadCloudProgress`。开发版、体验版、正式版共用同一套云函数时，`cloud.DYNAMIC_CURRENT_ENV` 不会按版本自动隔离数据；客户端需要传 `envVersion`，云函数按 `develop → leaderboard_dev`、`trial → leaderboard_trial`、`release → leaderboard` 路由集合。
+**Architecture:** 新增云函数 `syncProgress`（读写合一）；`wxApi.js` 新增 `getEnvPrefix()` 工具函数；`storage.js` 的本地 key 加环境前缀，`saveLevelProgress` 追加异步云端写，新增 `loadCloudProgress` 供启动时从云端恢复进度；`game.js` 在 `init()` 里调用一次 `loadCloudProgress`。开发版、体验版、正式版共用同一套云函数时，`cloud.DYNAMIC_CURRENT_ENV` 不会按版本自动隔离数据；客户端需要传 `envVersion`。排行榜继续路由到 `leaderboard` / `leaderboard_trial` / `leaderboard_dev`，关卡进度路由到 `progress` / `progress_trial` / `progress_dev`，避免进度文档污染榜单。
 
-**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（`leaderboard` / `leaderboard_trial` / `leaderboard_dev`），Vitest
+**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（排行榜：`leaderboard` / `leaderboard_trial` / `leaderboard_dev`；进度：`progress` / `progress_trial` / `progress_dev`），Vitest
 
 ---
 
@@ -440,4 +440,4 @@ git commit -m "feat(game): call loadCloudProgress on init to restore progress fr
 1. 右键 `cloudfunctions/syncProgress` 文件夹
 2. 选择「上传并部署：云端安装依赖」
 3. 部署完成后，开发版/体验版/正式版均可调用同一套云函数；数据隔离依赖客户端传入的 `envVersion`，不是 `cloud.DYNAMIC_CURRENT_ENV` 自动完成
-4. 在云开发控制台确认已创建 `leaderboard`、`leaderboard_trial`、`leaderboard_dev` 三个集合
+4. 在云开发控制台确认已创建排行榜集合 `leaderboard`、`leaderboard_trial`、`leaderboard_dev` 和进度集合 `progress`、`progress_trial`、`progress_dev`

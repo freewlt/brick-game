@@ -2,7 +2,9 @@
 import { storage, share, cloud, auth } from './wxApi.js'
 import { getEnvPrefix, getEnvVersion } from './env.js'
 
-// 当前运行环境，传给云函数用于集合路由（develop→leaderboard_dev, trial→leaderboard_trial, release→leaderboard）
+// 当前运行环境，传给云函数用于集合路由：
+// 排行榜：develop→leaderboard_dev, trial→leaderboard_trial, release→leaderboard
+// 关卡进度：develop→progress_dev, trial→progress_trial, release→progress
 const ENV_VERSION = getEnvVersion()
 
 // ==================== 机会系统 ====================

@@ -140,7 +140,7 @@ brick-game/
 - **场景管理**：StartScene / GameScene / ResultScene / AllClearScene / AchievementScene / LeaderboardScene / SettingsScene / DailyScene 八个场景类，通过 `_switchScene()` 切换，并在旧场景 `destroy()` 中释放动画、渐变缓存和音频资源
 - **音效系统**：基于 `wx.createWebAudioContext` 的 WebAudio 合成方案，无需音频文件，支持 BGM、消除音、连消音、胜负音、扩槽音等；音频节点结束后主动断开，非 BGM 音效延迟任务可在场景销毁时清理
 - **社交**：通过 `wxApi.cloud` 封装层读写云存储通关进度，`wxApi.share` 统一处理分享逻辑
-- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到云端排行榜集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；关卡进度与本地排行榜兜底 key 按运行环境加前缀，云集合按开发版 `leaderboard_dev` / 体验版 `leaderboard_trial` / 正式版 `leaderboard` 隔离
+- **关卡进度同步**：通关进度存储在设备本地（`wx.getStorageSync`）并异步同步到独立云端进度集合；启动时从云端读取最大值覆盖本地，换设备不丢进度；关卡进度与本地排行榜兜底 key 按运行环境加前缀，云端进度集合按开发版 `progress_dev` / 体验版 `progress_trial` / 正式版 `progress` 隔离，避免污染排行榜集合
 - **wx API 封装**：所有微信 API 调用集中在 `src/utils/wxApi.js`，统一 try/catch 与失败日志，业务代码不再直接调用 `wx.*`
 
 ---
@@ -160,9 +160,9 @@ brick-game/
 |------|------|
 | `src/utils/storage.js` → `SHARE_CONFIG.imageUrl` | 分享封面图地址（5:4 比例，建议 1000×800px CDN 链接） |
 | `src/config.js` → `AD_UNIT_ID` | 填入微信流量主激励视频广告单元 ID；留空时失败无机会时直接送机会（降级保底） |
-| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建集合 `leaderboard`、`leaderboard_trial`、`leaderboard_dev`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
+| `game.js` → `wx.cloud.init({ env: 'YOUR_ENV_ID' })` | 填入微信云开发环境 ID；在云开发控制台创建排行榜集合 `leaderboard`、`leaderboard_trial`、`leaderboard_dev` 和进度集合 `progress`、`progress_trial`、`progress_dev`（权限：仅创建者可读写），并右键 `cloudfunctions/submitScore`、`cloudfunctions/getTopN`、`cloudfunctions/syncProgress` 文件夹 → 上传并部署：云端安装依赖 |
 
-> 部署提醒：开发版、体验版、正式版仍调用同一套云函数，因此三个云函数都必须重新上传部署；旧客户端如果没有传 `envVersion`，云函数会回退到正式集合 `leaderboard` 并输出缺失环境参数日志。
+> 部署提醒：开发版、体验版、正式版仍调用同一套云函数，因此三个云函数都必须重新上传部署；旧客户端如果没有传 `envVersion`，排行榜云函数会回退到正式集合 `leaderboard`，进度云函数会回退到正式集合 `progress`，并输出缺失环境参数日志。
 
 ---
 
@@ -171,6 +171,7 @@ brick-game/
 ### v1.7.2（2026-05-18）
 - **修复** `getTopN` 云函数 `event.n` 参数缺少上限校验，恶意传入超大值会导致单次查询返回过多数据；现在服务端 clamp 到 `[1, 200]`，非法值回落到默认 50
 - **修复** `GameScene` 点击棋盘后的 `selectedCell` 高亮定时器未追踪句柄；场景销毁后定时器仍可能回调并写入已废弃的场景状态；改为 `_selectedCellTimer` 追踪，`destroy()` 时一并清理
+- **修复** `syncProgress` 复用排行榜集合导致仅同步进度的玩家也可能出现在榜单中；关卡进度改写入独立 `progress` / `progress_trial` / `progress_dev` 集合
 
 ### v1.7.1（2026-05-18）
 - **修复** 云函数无法执行：`project.config.json` 的 `packOptions.ignore` 将 `package.json` 排除在上传包之外，导致云端 npm install 无从执行，`wx-server-sdk` 始终找不到；移除该忽略规则后三个云函数均可正常部署
@@ -178,7 +179,7 @@ brick-game/
 - **修复** `saveProgress` 的 `cloud.call` 补充 `onFail` 错误日志，便于排查云函数调用失败
 
 ### v1.7.0（2026-05-18）
-- **新增** 云端关卡进度同步：通关进度异步写入云端 `leaderboard` 集合，启动时从云端读取最大值覆盖本地，换设备不再丢失进度
+- **新增** 云端关卡进度同步：通关进度异步写入云端 `progress` 集合，启动时从云端读取最大值覆盖本地，换设备不再丢失进度
 - **修复** 开发/体验/正式版共用同一本地 storage key 导致进度互相污染；本地 key 按运行环境加前缀（`dev_` / `trial_` / 正式版无前缀），三个环境完全隔离
 - **新增** 云函数 `syncProgress`（读写合一，`action: 'save'/'load'`），服务端 clamp `[0,29]` 防伪造，只允许前进不允许倒退
 - **验证** `npm test` 通过：6 个测试文件、104 个测试用例

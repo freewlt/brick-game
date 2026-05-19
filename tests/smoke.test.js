@@ -300,6 +300,27 @@ describe('leaderboard 云集合环境隔离', () => {
   })
 })
 
+describe('progress 云集合环境隔离', () => {
+  const getProgressCollectionName = (envVersion) => {
+    if (envVersion === 'develop') return 'progress_dev'
+    if (envVersion === 'trial') return 'progress_trial'
+    return 'progress'
+  }
+
+  it('develop 环境写入 progress_dev', () => {
+    expect(getProgressCollectionName('develop')).toBe('progress_dev')
+  })
+
+  it('trial 环境写入 progress_trial', () => {
+    expect(getProgressCollectionName('trial')).toBe('progress_trial')
+  })
+
+  it('release 和未知环境继续使用 progress', () => {
+    expect(getProgressCollectionName('release')).toBe('progress')
+    expect(getProgressCollectionName(undefined)).toBe('progress')
+  })
+})
+
 // NOTE: loadCloudProgress 依赖 wx 全局，使用内联 mock 验证逻辑契约
 describe('loadCloudProgress 云端进度恢复逻辑', () => {
   it('云端返回更大值时覆盖本地，调用 onDone(best)', () => {

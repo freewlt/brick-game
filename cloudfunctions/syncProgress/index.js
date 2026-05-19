@@ -2,19 +2,19 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-function getLeaderboardCollectionName(envVersion) {
-  if (envVersion === 'develop') return 'leaderboard_dev'
-  if (envVersion === 'trial') return 'leaderboard_trial'
-  if (envVersion === 'release') return 'leaderboard'
-  if (!envVersion) console.warn('[syncProgress] missing envVersion, fallback to leaderboard')
-  else console.warn(`[syncProgress] unknown envVersion "${envVersion}", fallback to leaderboard`)
-  return 'leaderboard'
+function getProgressCollectionName(envVersion) {
+  if (envVersion === 'develop') return 'progress_dev'
+  if (envVersion === 'trial') return 'progress_trial'
+  if (envVersion === 'release') return 'progress'
+  if (!envVersion) console.warn('[syncProgress] missing envVersion, fallback to progress')
+  else console.warn(`[syncProgress] unknown envVersion "${envVersion}", fallback to progress`)
+  return 'progress'
 }
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const { action } = event
-  const col = db.collection(getLeaderboardCollectionName(event.envVersion))
+  const col = db.collection(getProgressCollectionName(event.envVersion))
 
   if (action === 'save') {
     const levelProgress = Math.min(Math.max(parseInt(event.levelProgress, 10) || 0, 0), 29)

@@ -2,25 +2,22 @@
 
 **目标：** 将关卡进度（resume-point）从纯本地存储升级为云端同步，解决两个问题：换设备进度归零；开发/体验/正式版共用同一本地 key 导致进度互相污染。
 
-**架构：** 三处独立改动——新增云函数 `syncProgress`（读写合一）；`wxApi.js` 加 `cloud.call` 封装；`storage.js` 的 `saveLevelProgress` / `getLevelProgress` 改为云端优先、本地兜底，并加环境前缀隔离本地 key。开发版、体验版、正式版调用同一套云函数和同一云环境，因此云端数据隔离不能依赖 `cloud.DYNAMIC_CURRENT_ENV`；客户端必须传 `envVersion`，云函数按 `develop → leaderboard_dev`、`trial → leaderboard_trial`、`release → leaderboard` 路由集合。
+**架构：** 三处独立改动——新增云函数 `syncProgress`（读写合一）；`wxApi.js` 加 `cloud.call` 封装；`storage.js` 的 `saveLevelProgress` / `getLevelProgress` 改为云端优先、本地兜底，并加环境前缀隔离本地 key。开发版、体验版、正式版调用同一套云函数和同一云环境，因此云端数据隔离不能依赖 `cloud.DYNAMIC_CURRENT_ENV`；客户端必须传 `envVersion`。排行榜继续路由到 `leaderboard` / `leaderboard_trial` / `leaderboard_dev`，关卡进度路由到 `progress` / `progress_trial` / `progress_dev`，避免进度文档污染榜单。
 
-**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（`leaderboard` / `leaderboard_trial` / `leaderboard_dev`），Vitest
+**Tech Stack:** 微信小游戏 JS，wx-server-sdk，云开发数据库（排行榜：`leaderboard` / `leaderboard_trial` / `leaderboard_dev`；进度：`progress` / `progress_trial` / `progress_dev`），Vitest
 
 ---
 
 ## 数据模型
 
-正式版复用现有 `leaderboard` 集合，在每条记录新增 `levelProgress` 字段；体验版和开发版分别使用 `leaderboard_trial`、`leaderboard_dev`，避免测试数据污染正式榜。
+排行榜继续使用 `leaderboard` / `leaderboard_trial` / `leaderboard_dev`。关卡进度独立使用 `progress` / `progress_trial` / `progress_dev`，避免仅同步进度的玩家污染排行榜集合。
 
 ```
-leaderboard 文档（新增字段）：
+progress 文档：
 {
   _openid:       "...",          // 已有，服务端从 getWXContext() 取
-  nickname:      "...",          // 已有
-  avatarUrl:     "...",          // 已有
-  levelsPassed:  10,             // 已有：通关总数（排行榜用）
-  levelProgress: 9,              // 新增：当前进度 0-based 索引
-  updatedAt:     1716000000000   // 已有
+  levelProgress: 9,              // 当前进度 0-based 索引
+  updatedAt:     1716000000000
 }
 ```
 
@@ -75,7 +72,7 @@ exports.main = async (event) => {
 - `levelProgress` 服务端 clamp 到 `[0, 29]`，防止伪造
 - 只允许前进（`levelProgress > old.levelProgress`）
 - `cloud.DYNAMIC_CURRENT_ENV` 只表示云函数部署所在的云环境；开发版、体验版、正式版如果共用同一套云函数，就不会自动隔离数据
-- 客户端需传 `envVersion`；集合按 `leaderboard_dev` / `leaderboard_trial` / `leaderboard` 路由
+- 客户端需传 `envVersion`；集合按 `progress_dev` / `progress_trial` / `progress` 路由
 
 ---
 
